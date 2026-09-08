@@ -20,7 +20,8 @@
     "src/transaction.ts",
     "src/tree.ts",
     "src/view-server.ts",
-    "src/compliance.ts"
+    "src/compliance.ts",
+    "src/orbis.ts"
   ],
   "exclude": [
     "**/*.test.ts",

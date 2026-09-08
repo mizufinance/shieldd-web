@@ -11,6 +11,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify Orbis seed-binding bridge
+        run: node --test packages/wasm/tests/orbis-bridge.test.mjs
       - uses: dtolnay/rust-toolchain@1.89.0
         with:
           targets: wasm32-unknown-unknown
@@ -23,6 +28,10 @@ jobs:
       - name: Compile tracked browser source
         working-directory: packages/wasm/crate
         run: wasm-pack build --no-pack --target web --out-name index --out-dir ../wasm --no-opt
+      - name: Check dependency lock
+        run: git diff --exit-code -- packages/wasm/crate/Cargo.lock
+      - name: Verify shipped admin API vectors
+        run: node packages/wasm/tests/admin-api.mjs
       - name: Record source revisions
         run: |
           git rev-parse HEAD > packages/wasm/wasm/source-revision.txt
