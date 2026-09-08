@@ -79,3 +79,5 @@ CURSOR_RULES.md
 
 # Cursor IDE
 .cursor
+
+/packages/wasm/wasm/
