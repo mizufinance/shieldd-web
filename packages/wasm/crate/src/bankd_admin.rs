@@ -38,6 +38,11 @@ pub fn poc_sign_dev_asset_registration(message: &[u8]) -> Result<Vec<u8>, JsValu
         .map_err(|error| JsValue::from_str(&format!("invalid asset registration: {error}")))?;
     let authority_sk = dev_signing_key(2).map_err(|error| JsValue::from_str(&error.to_string()))?;
     message.registration_authority_vk = Some(VerificationKey::from(&authority_sk));
+    if message.is_regulated && message.seizure_authority_vk.is_none() {
+        let seizure_sk =
+            dev_signing_key(3).map_err(|error| JsValue::from_str(&error.to_string()))?;
+        message.seizure_authority_vk = Some(VerificationKey::from(&seizure_sk));
+    }
     let registrar_sk = dev_signing_key(1).map_err(|error| JsValue::from_str(&error.to_string()))?;
     let body = message.registration_grant_body(GRANT_VALID_UNTIL_UNIX);
     message.asset_registration_grant = Some(AssetRegistrationGrant {

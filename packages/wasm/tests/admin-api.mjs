@@ -74,3 +74,23 @@ assert.ok(certificate, 'current registration must carry a capability certificate
 console.log(
   'Shipped exports and key vectors match; current registration contains a certified leaf',
 );
+
+const unsignedAsset = Buffer.concat([
+  field(1, asset),
+  Buffer.from([16, 1]),
+  field(3, generator),
+  field(4, Array(16).fill(255)),
+  field(6, generator),
+  field(7, Buffer.from('bankd-dev-ring')),
+  field(8, Buffer.from('bankd-api-vector')),
+  field(9, Buffer.from('read')),
+  field(10, Buffer.from('document')),
+]);
+const signedAsset = fields(api.pocSignDevAssetRegistration(unsignedAsset));
+const seizureAuthority = signedAsset.find(([n]) => n === 14)?.[1];
+assert.ok(seizureAuthority, 'regulated registration requires a seizure authority');
+assert.notEqual(seizureAuthority, signedAsset.find(([n]) => n === 11)?.[1]);
+const grant = fields(Buffer.from(signedAsset.find(([n]) => n === 12)[1], 'hex'));
+const grantBody = fields(Buffer.from(grant.find(([n]) => n === 1)[1], 'hex'));
+assert.equal(grantBody.find(([n]) => n === 14)?.[1], seizureAuthority);
+console.log('Asset grant binds the development seizure authority');
