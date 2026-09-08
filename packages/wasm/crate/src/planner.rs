@@ -344,15 +344,14 @@ async fn plan_ics20_withdrawal<Db: Database>(
         .map(|record| ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position))
         .collect::<Vec<_>>();
     let change_output = (change > Amount::zero()).then(|| {
-        let output = ShieldedOutputPlan::new(
+        ShieldedOutputPlan::new(
             &mut OsRng,
             Value {
                 amount: change,
                 asset_id,
             },
             sender,
-        );
-        output
+        )
     });
 
     let batch = compliance_batch(context, &spends, change_output.as_slice()).await?;
@@ -414,15 +413,14 @@ async fn plan_host_withdrawal<Db: Database>(
         .map(|record| ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position))
         .collect::<Vec<_>>();
     let change_output = (change > Amount::zero()).then(|| {
-        let output = ShieldedOutputPlan::new(
+        ShieldedOutputPlan::new(
             &mut OsRng,
             Value {
                 amount: change,
                 asset_id,
             },
             sender,
-        );
-        output
+        )
     });
 
     let batch = compliance_batch(context, &spends, change_output.as_slice()).await?;
