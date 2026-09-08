@@ -13,3 +13,5 @@ pub mod utils;
 pub mod view_server;
 
 mod bankd_admin;
+
+mod volume;

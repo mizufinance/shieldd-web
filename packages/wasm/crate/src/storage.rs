@@ -71,6 +71,109 @@ impl<Db: Database> Storage<Db> {
         Ok(Storage { db, tables })
     }
 
+    pub async fn volume_journal(&self) -> WasmResult<crate::volume::VolumeJournal> {
+        Ok(self
+            .db
+            .get(&self.tables.app_parameters, "volume_journal")
+            .await?
+            .unwrap_or_default())
+    }
+    pub async fn set_volume_journal(
+        &self,
+        journal: &crate::volume::VolumeJournal,
+    ) -> WasmResult<()> {
+        self.db
+            .put_with_key(&self.tables.app_parameters, "volume_journal", journal)
+            .await
+    }
+    pub async fn volume_plan(
+        &self,
+        witness: &shieldd_shielded_pool::ActionWitness,
+        fvk: &shieldd_keys::FullViewingKey,
+        timestamp: u64,
+        amount: u128,
+        eligible: bool,
+    ) -> WasmResult<shieldd_shielded_pool::VolumeAccumulatorPlan> {
+        Ok(self
+            .volume_journal()
+            .await?
+            .plan(witness, fvk, timestamp, amount, eligible)?)
+    }
+    pub async fn store_compliance(
+        &self,
+        block: &shieldd_compact_block::CompactBlock,
+    ) -> WasmResult<()> {
+        for event in block
+            .compliance_asset_registrations
+            .iter()
+            .filter(|event| event.is_regulated)
+        {
+            self.db
+                .put_with_key(
+                    &self.tables.app_parameters,
+                    format!("compliance_policy/{}", event.asset_id),
+                    &shieldd_proto::core::component::compliance::v1::AssetPolicy::from(
+                        event.asset_policy.clone(),
+                    ),
+                )
+                .await?;
+        }
+        for leaf in block
+            .compliance_user_registrations
+            .iter()
+            .map(|event| &event.leaf)
+            .chain(
+                block
+                    .compliance_user_status_changes
+                    .iter()
+                    .map(|event| &event.leaf),
+            )
+        {
+            self.db
+                .put_with_key(
+                    &self.tables.app_parameters,
+                    format!("compliance_leaf/{}/{}", leaf.asset_id, leaf.address),
+                    leaf,
+                )
+                .await?;
+        }
+        Ok(())
+    }
+    pub async fn note_nullifier_key(
+        &self,
+        fvk: &shieldd_keys::FullViewingKey,
+        note: &Note,
+    ) -> WasmResult<shieldd_keys::keys::NullifierKey> {
+        let policy: Option<shieldd_proto::core::component::compliance::v1::AssetPolicy> = self
+            .db
+            .get(
+                &self.tables.app_parameters,
+                format!("compliance_policy/{}", note.asset_id()),
+            )
+            .await?;
+        let Some(policy) = policy else {
+            return Ok(*fvk.nullifier_key());
+        };
+        let policy = shieldd_compliance::AssetPolicy::try_from(policy)?;
+        let leaf: shieldd_compliance::ComplianceLeaf = self
+            .db
+            .get(
+                &self.tables.app_parameters,
+                format!("compliance_leaf/{}/{}", note.asset_id(), note.address()),
+            )
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("regulated note missing its compliance leaf"))?;
+        Ok(shieldd_compliance::effective_nullifier_key(
+            *fvk.nullifier_key(),
+            fvk.incoming(),
+            &note.address(),
+            note.asset_id(),
+            policy.ring.ring_pk,
+            leaf.rnk_dh_pk,
+            true,
+        )?)
+    }
+
     pub fn get_database(&self) -> *const Db {
         &self.db
     }

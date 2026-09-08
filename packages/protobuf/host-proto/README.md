@@ -1,0 +1,1 @@
+These protobuf messages describe the Tendermint proxy exposed by browser host applications, including Bankd. They are generated with the browser SDK independently of the embedded Shieldd service schemas.
