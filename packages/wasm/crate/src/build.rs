@@ -508,6 +508,7 @@ mod tests {
                 asset_id,
             },
             Rseed::generate(&mut OsRng),
+            shieldd_shielded_pool::RecoveryCommitment::unavailable(),
         )
         .unwrap();
 
@@ -523,7 +524,7 @@ mod tests {
                 amount: 5u64.into(),
                 asset_id,
             },
-            address,
+            address.clone(),
         );
         let host_plan = ShieldedHostWithdrawalPlan::new(
             vec![spend],
@@ -538,6 +539,35 @@ mod tests {
                 }),
             },
             decaf377::Fr::from(9u64),
+            {
+                let assets = shieldd_compliance::IndexedMerkleTree::new();
+                let (position, leaf, path) = assets.non_membership_proof(asset_id.0).unwrap();
+                shieldd_shielded_pool::WithdrawalContext {
+                    witness: shieldd_shielded_pool::ActionWitness {
+                        asset: shieldd_shielded_pool::AssetWitness {
+                            asset_id,
+                            root: assets.root(),
+                            leaf,
+                            position,
+                            path: path.into(),
+                            is_regulated: false,
+                        },
+                        user_root: shieldd_tct::StateCommitment(decaf377::Fq::from(0u64)),
+                        sender: shieldd_shielded_pool::UserWitness {
+                            leaf: shieldd_compliance::ComplianceLeaf::synthetic_unregulated(
+                                address, asset_id,
+                            ),
+                            position: 0,
+                            path: Default::default(),
+                        },
+                        policy: None,
+                    },
+                    timestamp: 86_400,
+                    nonce: decaf377::Fr::from(7u64),
+                }
+            },
+            shieldd_shielded_pool::VolumeAccumulatorPlan::padding(86_400),
+            Default::default(),
         )
         .unwrap();
         let action_plan = ActionPlan::ShieldedHostWithdrawal(host_plan);

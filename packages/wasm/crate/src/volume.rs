@@ -204,7 +204,7 @@ mod tests {
         let address = fvk.payment_address(0u32.into());
         let asset_id = shieldd_asset::asset::Id(Fq::from(77u64));
         let ring_pk = decaf377::Element::GENERATOR;
-        let rnk_dh_pk = address.diversified_generator();
+        let rnk_dh_pk = *address.diversified_generator();
         let rnk = shieldd_compliance::derive_regulated_nullifier_key(
             fvk.incoming(),
             &address,
