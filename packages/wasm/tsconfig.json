@@ -23,8 +23,5 @@
     "src/compliance.ts",
     "src/orbis.ts"
   ],
-  "exclude": [
-    "**/*.test.ts",
-    "src/test/**"
-  ]
+  "exclude": ["**/*.test.ts", "src/test/**"]
 }
