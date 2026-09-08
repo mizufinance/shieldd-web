@@ -1,6 +1,5 @@
 import type { OrbisAuditPackage } from './orbis.js';
-import { Address } from '@mizufinance/protobuf/shieldd/core/keys/v1/keys_pb';
-import { FullViewingKey } from '@mizufinance/protobuf/shieldd/core/keys/v1/keys_pb';
+import { Address, FullViewingKey } from '@mizufinance/protobuf/shieldd/core/keys/v1/keys_pb';
 import { AssetId } from '@mizufinance/protobuf/shieldd/core/asset/v1/asset_pb';
 import {
   AssetPolicy,
