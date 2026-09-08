@@ -15,6 +15,7 @@ import type {
   SctService,
   ShieldedPoolService,
 } from './services/shieldd-core.js';
+import type { TendermintProxyService } from './services/shieldd-util.js';
 
 export type ShielddService =
   | typeof AppService
@@ -29,4 +30,5 @@ export type ShielddService =
   | typeof IbcConnectionMsgService
   | typeof SctService
   | typeof ShieldedPoolService
+  | typeof TendermintProxyService
   | typeof ViewService;

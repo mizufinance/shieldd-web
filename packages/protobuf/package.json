@@ -20,8 +20,9 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "lint:strict": "tsc --noEmit && eslint src --max-warnings 0",
-    "proto": "$npm_execpath run gen:cosmos-sdk --clean && $npm_execpath run gen:ibc && $npm_execpath run gen:ics23 && $npm_execpath run gen:shieldd && $npm_execpath run gen:noble && touch gen/.npmignore",
-    "test": "vitest run"
+    "proto": "$npm_execpath run gen:cosmos-sdk --clean && $npm_execpath run gen:ibc && $npm_execpath run gen:ics23 && $npm_execpath run gen:shieldd && $npm_execpath run gen:host && $npm_execpath run gen:noble && touch gen/.npmignore",
+    "test": "vitest run",
+    "gen:host": "buf generate host-proto"
   },
   "files": [
     "dist"
