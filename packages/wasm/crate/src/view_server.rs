@@ -256,7 +256,7 @@ impl ViewServer {
             let mut commitments = 0usize;
             for payload in block.state_payloads.into_iter() {
                 if commitments == u16::MAX as usize + 1 {
-                    self.sct.end_block()?;
+                    self.sct.end_block().map_err(anyhow::Error::from)?;
                     commitments = 0;
                 }
                 commitments += 1;

@@ -9,8 +9,18 @@ use shieldd_shielded_pool::{
 };
 use shieldd_tct::{Position, StateCommitment};
 
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "VolumeAccumulatorState")]
+struct StoredVolume {
+    subject: Fq,
+    day_start: u64,
+    undisclosed_volume: u128,
+    blinding: Fq,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmedVolume {
+    #[serde(with = "StoredVolume")]
     pub state: VolumeAccumulatorState,
     pub commitment: StateCommitment,
     pub position: Position,
@@ -167,5 +177,158 @@ impl VolumeJournal {
                 None => Ok(padding),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shieldd_compliance::{AssetPolicy, ComplianceLeaf, IndexedLeaf, MerklePath};
+    use shieldd_shielded_pool::{AssetWitness, TransferProofContext, UserWitness};
+
+    fn witness() -> (FullViewingKey, ActionWitness) {
+        let fvk = shieldd_keys::test_keys::FULL_VIEWING_KEY.clone();
+        let address = fvk.payment_address(0u32.into());
+        let asset_id = shieldd_asset::asset::Id(Fq::from(77u64));
+        let ring_pk = decaf377::Element::GENERATOR;
+        let rnk_dh_pk = address.diversified_generator();
+        let rnk = shieldd_compliance::derive_regulated_nullifier_key(
+            fvk.incoming(),
+            &address,
+            asset_id,
+            ring_pk,
+            rnk_dh_pk,
+        )
+        .unwrap();
+        let leaf = ComplianceLeaf::registered_from_rnk(address, asset_id, ring_pk, rnk_dh_pk, rnk)
+            .unwrap();
+        let policy = AssetPolicy::new(
+            ring_pk,
+            100,
+            vec![],
+            None,
+            "ring".into(),
+            ring_pk,
+            "policy".into(),
+            "read".into(),
+            "document".into(),
+        );
+        let indexed = IndexedLeaf::from_policy(asset_id.0, 0, Fq::from(0u64), &policy);
+        (
+            fvk,
+            ActionWitness {
+                asset: AssetWitness {
+                    asset_id,
+                    root: indexed.commit(),
+                    leaf: indexed,
+                    position: 0,
+                    path: MerklePath::default(),
+                    is_regulated: true,
+                },
+                user_root: StateCommitment(Fq::from(0u64)),
+                sender: UserWitness {
+                    leaf,
+                    position: 0,
+                    path: MerklePath::default(),
+                },
+                policy: Some(policy),
+            },
+        )
+    }
+
+    #[test]
+    fn recovered_volume_continues_and_incomplete_recovery_discloses() {
+        let (fvk, witness) = witness();
+        let timestamp = 86_400;
+        let mut journal = VolumeJournal::default();
+        assert!(!journal
+            .plan(&witness, &fvk, timestamp, 20, true)
+            .unwrap()
+            .is_real());
+        journal.begin_block(0, false).unwrap();
+        let origin = journal.plan(&witness, &fvk, timestamp, 20, true).unwrap();
+        assert!(origin.starts_new_day());
+        let payload = origin.selected_payload(
+            fvk.nullifier_key(),
+            fvk.outgoing(),
+            Fq::from(1u64),
+            TransferProofContext::Ordinary,
+        );
+        journal.observe(&payload);
+        assert!(!journal
+            .plan(&witness, &fvk, timestamp, 30, true)
+            .unwrap()
+            .is_real());
+        let (state, real) = payload.trial_decrypt(fvk.outgoing()).unwrap();
+        assert!(real);
+        journal
+            .confirm(state, payload.commitment, Position::from(5u64))
+            .unwrap();
+        let continuation = journal.plan(&witness, &fvk, timestamp, 30, true).unwrap();
+        assert_eq!(
+            continuation.successor_state().unwrap().undisclosed_volume,
+            50
+        );
+        assert!(!continuation.starts_new_day());
+        assert!(!journal
+            .plan(&witness, &fvk, timestamp, 81, true)
+            .unwrap()
+            .is_real());
+        assert!(!journal
+            .plan(&witness, &fvk, timestamp, 1, false)
+            .unwrap()
+            .is_real());
+        journal.observe(&continuation.selected_payload(
+            fvk.nullifier_key(),
+            fvk.outgoing(),
+            Fq::from(2u64),
+            TransferProofContext::Ordinary,
+        ));
+        assert!(!journal
+            .plan(&witness, &fvk, timestamp, 1, true)
+            .unwrap()
+            .is_real());
+        journal.begin_block(2, false).unwrap();
+        assert!(!journal.complete);
+        assert!(!journal
+            .plan(&witness, &fvk, timestamp * 2, 1, true)
+            .unwrap()
+            .is_real());
+        assert!(journal.begin_block(1, false).is_err());
+    }
+
+    #[test]
+    fn scan_skips_and_expired_days_do_not_enable_a_second_origin() {
+        let (fvk, witness) = witness();
+        let mut journal = VolumeJournal::default();
+        journal.begin_block(0, true).unwrap();
+        journal.begin_block(1, false).unwrap();
+        assert!(!journal.complete);
+        let state = VolumeAccumulatorState {
+            subject: Fq::from(1u64),
+            day_start: 0,
+            undisclosed_volume: 1,
+            blinding: Fq::from(2u64),
+        };
+        assert!(journal
+            .confirm(
+                state.clone(),
+                StateCommitment(Fq::from(0u64)),
+                Position::from(0u64)
+            )
+            .is_err());
+        journal
+            .confirm(state.clone(), state.commitment(), Position::from(0u64))
+            .unwrap();
+        let mut payload = VolumeAccumulatorPayload::canonical_fee_funding();
+        payload.day_start = VOLUME_ACCUMULATOR_RETENTION_SECS + 86_400;
+        journal.observe(&payload);
+        journal.observe(&payload);
+        assert!(journal.tips.is_empty());
+        assert_eq!(journal.seen.len(), 1);
+        assert!(!journal
+            .plan(&witness, &fvk, payload.day_start, 1, true)
+            .unwrap()
+            .is_real());
     }
 }

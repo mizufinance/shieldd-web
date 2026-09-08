@@ -4,7 +4,6 @@ import * as ibcCore from './services/cosmos-ibc-core.js';
 import * as shielddCnidarium from './services/shieldd-cnidarium.js';
 import * as shielddCore from './services/shieldd-core.js';
 import * as shielddCustody from './services/shieldd-custody.js';
-import * as shielddUtil from './services/shieldd-util.js';
 import * as shielddView from './services/shieldd-view.js';
 import { ClientState, Header } from '../gen/ibc/lightclients/tendermint/v1/tendermint_pb.js';
 
@@ -24,7 +23,6 @@ export const typeRegistry: IMessageTypeRegistry = createRegistry(
   ...Object.values(shielddCnidarium),
   ...Object.values(shielddCore),
   ...Object.values(shielddCustody),
-  ...Object.values(shielddUtil),
   ...Object.values(shielddView),
 
   // Types not explicitly referenced by any above services should be added here.

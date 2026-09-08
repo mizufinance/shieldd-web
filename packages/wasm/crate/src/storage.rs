@@ -112,7 +112,9 @@ impl<Db: Database> Storage<Db> {
                 .put_with_key(
                     &self.tables.app_parameters,
                     format!("compliance_policy/{}", event.asset_id),
-                    &event.asset_policy,
+                    &shieldd_proto::core::component::compliance::v1::AssetPolicy::from(
+                        event.asset_policy.clone(),
+                    ),
                 )
                 .await?;
         }
@@ -142,7 +144,7 @@ impl<Db: Database> Storage<Db> {
         fvk: &shieldd_keys::FullViewingKey,
         note: &Note,
     ) -> WasmResult<shieldd_keys::keys::NullifierKey> {
-        let policy: Option<shieldd_compliance::AssetPolicy> = self
+        let policy: Option<shieldd_proto::core::component::compliance::v1::AssetPolicy> = self
             .db
             .get(
                 &self.tables.app_parameters,
@@ -152,6 +154,7 @@ impl<Db: Database> Storage<Db> {
         let Some(policy) = policy else {
             return Ok(*fvk.nullifier_key());
         };
+        let policy = shieldd_compliance::AssetPolicy::try_from(policy)?;
         let leaf: shieldd_compliance::ComplianceLeaf = self
             .db
             .get(
