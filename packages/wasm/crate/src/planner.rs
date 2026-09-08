@@ -23,6 +23,32 @@ use crate::storage::{init_idb_storage, DbConstants, Storage};
 use crate::utils;
 
 const MAX_WITHDRAWAL_INPUTS: usize = 2;
+struct PlanningContext<'a> {
+    grpc_url: &'a str,
+    routing: shieldd_shielded_pool::discovery::Parameters,
+    timestamp: u64,
+    fvk: &'a FullViewingKey,
+}
+async fn compliance_batch(
+    context: &PlanningContext<'_>,
+    spends: &[ShieldedInputPlan],
+    outputs: &[ShieldedOutputPlan],
+) -> anyhow::Result<shieldd_compliance::BatchComplianceData> {
+    crate::compliance::fetch_batch_compliance_data(
+        context.grpc_url,
+        &spends
+            .iter()
+            .map(|s| (s.note.asset_id(), s.note.address()))
+            .collect::<Vec<_>>(),
+        &outputs
+            .iter()
+            .map(|o| (o.value.asset_id, o.dest_address.clone()))
+            .collect::<Vec<_>>(),
+    )
+    .await?
+    .map(|(batch, _, _)| batch)
+    .ok_or_else(|| anyhow!("shielded action requires compliance witnesses"))
+}
 
 #[wasm_bindgen]
 pub async fn plan_transaction(
@@ -90,6 +116,15 @@ pub async fn plan_transaction_inner<Db: Database>(
         .transpose()?
         .unwrap_or_default();
 
+    let context = PlanningContext {
+        grpc_url: &grpc_url,
+        routing: storage
+            .get_discovery_parameters()
+            .await?
+            .context("discovery parameters are not synced")?,
+        timestamp: current_unix_timestamp(),
+        fvk: &full_viewing_key,
+    };
     let mut actions = Vec::new();
 
     if !request.outputs.is_empty() {
@@ -111,21 +146,34 @@ pub async fn plan_transaction_inner<Db: Database>(
             })
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
-        let action = plan_transfer(&storage, source, outputs, recent_position_floor).await?;
+        let action =
+            plan_transfer(&storage, source, outputs, recent_position_floor, &context).await?;
         actions.push(ActionPlan::Transfer(action));
     }
 
     for withdrawal in request.ics20_withdrawals {
         let withdrawal: Ics20Withdrawal = withdrawal.try_into()?;
-        let action =
-            plan_ics20_withdrawal(&storage, source, withdrawal, recent_position_floor).await?;
+        let action = plan_ics20_withdrawal(
+            &storage,
+            source,
+            withdrawal,
+            recent_position_floor,
+            &context,
+        )
+        .await?;
         actions.push(ActionPlan::ShieldedIcs20Withdrawal(action));
     }
 
     for withdrawal in request.host_withdrawals {
         let withdrawal: HostWithdrawal = withdrawal.try_into()?;
-        let action =
-            plan_host_withdrawal(&storage, source, withdrawal, recent_position_floor).await?;
+        let action = plan_host_withdrawal(
+            &storage,
+            source,
+            withdrawal,
+            recent_position_floor,
+            &context,
+        )
+        .await?;
         actions.push(ActionPlan::ShieldedHostWithdrawal(action));
     }
 
@@ -171,19 +219,7 @@ pub async fn plan_transaction_inner<Db: Database>(
         ));
     }
 
-    let discovery_parameters = storage
-        .get_discovery_parameters()
-        .await?
-        .context("discovery parameters are not synced")?;
-    plan.populate_routing_parameters(discovery_parameters);
     plan.sort_actions();
-    crate::compliance::enrich_plan_with_compliance(
-        &mut plan,
-        &grpc_url,
-        &mut OsRng,
-        Some(current_unix_timestamp()),
-    )
-    .await?;
 
     Ok(plan)
 }
@@ -193,6 +229,7 @@ async fn plan_transfer<Db: Database>(
     source: AddressIndex,
     outputs: Vec<(Value, Address)>,
     recent_position_floor: u64,
+    context: &PlanningContext<'_>,
 ) -> WasmResult<TransferPlan> {
     let first_value = outputs
         .first()
@@ -226,26 +263,16 @@ async fn plan_transfer<Db: Database>(
         .map(|record| record.note.address())
         .ok_or_else(|| anyhow!("transfer requires at least one spend"))?;
 
-    let target_timestamp = current_unix_timestamp();
     let spends = selected
         .iter()
-        .map(|record| {
-            let mut spend =
-                ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position);
-            spend.target_timestamp = target_timestamp;
-            spend
-        })
+        .map(|record| ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position))
         .collect::<Vec<_>>();
     let mut shielded_outputs = outputs
         .into_iter()
-        .map(|(value, address)| {
-            let mut output = ShieldedOutputPlan::new(&mut OsRng, value, address);
-            output.target_timestamp = target_timestamp;
-            output
-        })
+        .map(|(value, address)| ShieldedOutputPlan::new(&mut OsRng, value, address))
         .collect::<Vec<_>>();
     if change > Amount::zero() {
-        let mut change_output = ShieldedOutputPlan::new(
+        let change_output = ShieldedOutputPlan::new(
             &mut OsRng,
             Value {
                 amount: change,
@@ -253,14 +280,35 @@ async fn plan_transfer<Db: Database>(
             },
             sender,
         );
-        change_output.target_timestamp = target_timestamp;
         shielded_outputs.push(change_output);
     }
 
+    let batch = compliance_batch(context, &spends, &shielded_outputs).await?;
+    let witness = crate::compliance::action_witness(&batch, &spends)?;
+    let recipient =
+        crate::compliance::user_witness(&batch, &shielded_outputs[0].dest_address, asset_id)?;
+    let volume = storage
+        .volume_plan(
+            &witness,
+            context.fvk,
+            context.timestamp,
+            shielded_outputs[0].value.amount.value(),
+            recipient.leaf.address != witness.sender.leaf.address,
+        )
+        .await?;
     Ok(TransferPlan::new(
         spends,
         shielded_outputs,
         Fr::rand(&mut OsRng),
+        shieldd_shielded_pool::TransferContext {
+            witness,
+            recipient,
+            timestamp: context.timestamp,
+            nonce: Fr::rand(&mut OsRng),
+        },
+        volume,
+        shieldd_shielded_pool::TransferProofContext::Ordinary,
+        context.routing.clone(),
     )?)
 }
 
@@ -269,6 +317,7 @@ async fn plan_ics20_withdrawal<Db: Database>(
     source: AddressIndex,
     withdrawal: Ics20Withdrawal,
     recent_position_floor: u64,
+    context: &PlanningContext<'_>,
 ) -> WasmResult<ShieldedIcs20WithdrawalPlan> {
     let asset_id = withdrawal.denom.id();
     let selected = select_notes(
@@ -290,18 +339,12 @@ async fn plan_ics20_withdrawal<Db: Database>(
         .map(|record| record.note.address())
         .ok_or_else(|| anyhow!("withdraw requires at least one spend"))?;
 
-    let target_timestamp = current_unix_timestamp();
     let spends = selected
         .iter()
-        .map(|record| {
-            let mut spend =
-                ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position);
-            spend.target_timestamp = target_timestamp;
-            spend
-        })
+        .map(|record| ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position))
         .collect::<Vec<_>>();
     let change_output = (change > Amount::zero()).then(|| {
-        let mut output = ShieldedOutputPlan::new(
+        let output = ShieldedOutputPlan::new(
             &mut OsRng,
             Value {
                 amount: change,
@@ -309,15 +352,32 @@ async fn plan_ics20_withdrawal<Db: Database>(
             },
             sender,
         );
-        output.target_timestamp = target_timestamp;
         output
     });
 
+    let batch = compliance_batch(context, &spends, change_output.as_slice()).await?;
+    let witness = crate::compliance::action_witness(&batch, &spends)?;
+    let volume = storage
+        .volume_plan(
+            &witness,
+            context.fvk,
+            context.timestamp,
+            withdrawal.amount.value(),
+            true,
+        )
+        .await?;
     Ok(ShieldedIcs20WithdrawalPlan::new(
         spends,
         change_output,
         withdrawal,
         Fr::rand(&mut OsRng),
+        shieldd_shielded_pool::WithdrawalContext {
+            witness,
+            timestamp: context.timestamp,
+            nonce: Fr::rand(&mut OsRng),
+        },
+        volume,
+        context.routing.clone(),
     )?)
 }
 
@@ -326,6 +386,7 @@ async fn plan_host_withdrawal<Db: Database>(
     source: AddressIndex,
     withdrawal: HostWithdrawal,
     recent_position_floor: u64,
+    context: &PlanningContext<'_>,
 ) -> WasmResult<ShieldedHostWithdrawalPlan> {
     let asset_id = withdrawal.value.asset_id;
     let selected = select_notes(
@@ -348,18 +409,12 @@ async fn plan_host_withdrawal<Db: Database>(
         .map(|record| record.note.address())
         .ok_or_else(|| anyhow!("host withdrawal requires at least one spend"))?;
 
-    let target_timestamp = current_unix_timestamp();
     let spends = selected
         .iter()
-        .map(|record| {
-            let mut spend =
-                ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position);
-            spend.target_timestamp = target_timestamp;
-            spend
-        })
+        .map(|record| ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position))
         .collect::<Vec<_>>();
     let change_output = (change > Amount::zero()).then(|| {
-        let mut output = ShieldedOutputPlan::new(
+        let output = ShieldedOutputPlan::new(
             &mut OsRng,
             Value {
                 amount: change,
@@ -367,15 +422,32 @@ async fn plan_host_withdrawal<Db: Database>(
             },
             sender,
         );
-        output.target_timestamp = target_timestamp;
         output
     });
 
+    let batch = compliance_batch(context, &spends, change_output.as_slice()).await?;
+    let witness = crate::compliance::action_witness(&batch, &spends)?;
+    let volume = storage
+        .volume_plan(
+            &witness,
+            context.fvk,
+            context.timestamp,
+            withdrawal.value.amount.value(),
+            true,
+        )
+        .await?;
     Ok(ShieldedHostWithdrawalPlan::new(
         spends,
         change_output,
         withdrawal,
         Fr::rand(&mut OsRng),
+        shieldd_shielded_pool::WithdrawalContext {
+            witness,
+            timestamp: context.timestamp,
+            nonce: Fr::rand(&mut OsRng),
+        },
+        volume,
+        context.routing.clone(),
     )?)
 }
 

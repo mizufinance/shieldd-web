@@ -2,11 +2,11 @@ use anyhow::{anyhow, Result};
 use decaf377_rdsa::{SigningKey, SpendAuth, VerificationKey};
 use serde::Serialize;
 use shieldd_compliance::structs::{
-    AssetRegistrationGrant, MsgRegisterAsset, MsgRegisterUser, UserRegistrationGrant,
-    UserRegistrationGrantBody,
+    AssetRegistrationGrant, MsgRegisterAsset, MsgRegisterUser, OrbisCapabilityCertificate,
+    UserRegistrationGrant, UserRegistrationGrantBody,
 };
-use shieldd_compliance::ComplianceLeaf;
-use shieldd_keys::Address;
+use shieldd_compliance::{derive_regulated_nullifier_key, AssetPolicy, ComplianceLeaf};
+use shieldd_keys::{Address, FullViewingKey};
 use shieldd_proto::{core::component::compliance::v1 as pb, DomainType, Message};
 use shieldd_transaction::{ActionPlan, TransactionPlan};
 use wasm_bindgen::prelude::*;
@@ -52,7 +52,9 @@ pub fn poc_sign_dev_asset_registration(message: &[u8]) -> Result<Vec<u8>, JsValu
 pub fn poc_build_dev_user_registration(
     address: &[u8],
     asset_id: &[u8],
-    policy_id: String,
+    policy_bytes: &[u8],
+    full_viewing_key: &[u8],
+    chain_id: String,
 ) -> Result<Vec<u8>, JsValue> {
     let address = Address::decode(address)
         .map_err(|error| JsValue::from_str(&format!("invalid address: {error}")))?;
@@ -60,7 +62,34 @@ pub fn poc_build_dev_user_registration(
         .map_err(|error| JsValue::from_str(&format!("invalid asset id protobuf: {error}")))?
         .try_into()
         .map_err(|error| JsValue::from_str(&format!("invalid asset id: {error}")))?;
-    let leaf = ComplianceLeaf::new(address, asset_id);
+    let result = (|| -> Result<_> {
+        let policy = AssetPolicy::try_from(pb::AssetPolicy::decode(policy_bytes)?)?;
+        let fvk = FullViewingKey::decode(full_viewing_key)?;
+        let ring_sk = decaf377::Fr::from(1u64);
+        anyhow::ensure!(policy.ring.ring_pk == decaf377::Element::GENERATOR,
+            "development registration requires the public localnet ring key; other rings must supply an Orbis capability certificate");
+        let rnk_dh_pk = address.diversified_generator() * ring_sk;
+        let rnk = derive_regulated_nullifier_key(
+            fvk.incoming(),
+            &address,
+            asset_id,
+            policy.ring.ring_pk,
+            rnk_dh_pk,
+        )?;
+        let leaf = ComplianceLeaf::registered_from_rnk(
+            address,
+            asset_id,
+            policy.ring.ring_pk,
+            rnk_dh_pk,
+            rnk,
+        )?;
+        let certificate =
+            OrbisCapabilityCertificate::sign(chain_id, &leaf, &policy, ring_sk, rand_core::OsRng)?;
+        certificate.verify(&leaf, &policy, &certificate.chain_id)?;
+        Ok((leaf, certificate, policy.ring.policy_id))
+    })();
+    let (leaf, certificate, policy_id) =
+        result.map_err(|error| JsValue::from_str(&error.to_string()))?;
     let mut nonce = vec![0u8; 16];
     rand_core::RngCore::fill_bytes(&mut rand_core::OsRng, &mut nonce);
     let authority_sk = dev_signing_key(2).map_err(|error| JsValue::from_str(&error.to_string()))?;
@@ -72,6 +101,7 @@ pub fn poc_build_dev_user_registration(
     };
     let message = MsgRegisterUser {
         leaf,
+        capability_certificate: Some(certificate),
         grant: Some(UserRegistrationGrant {
             signature: authority_sk.sign(rand_core::OsRng, &body.signing_bytes()),
             body,

@@ -9,9 +9,9 @@ use shieldd_keys::{keys::SpendKey, symmetric::PayloadKey, FullViewingKey};
 use shieldd_proto::DomainType;
 use shieldd_shielded_pool::{
     gnark::{
-        decode_shielded_ics20_withdrawal_witness_v12, decode_transfer_witness_v20,
-        encode_shielded_ics20_withdrawal_witness_v12,
-        translate_shielded_ics20_withdrawal_proof_result, translate_transfer_proof_result,
+        decode_shielded_ics20_withdrawal_witness, decode_transfer_witness,
+        encode_shielded_ics20_withdrawal_witness, translate_shielded_ics20_withdrawal_proof_result,
+        translate_transfer_proof_result,
     },
     ShieldedIcs20WithdrawalFamilyId,
 };
@@ -65,12 +65,18 @@ fn witness_inner(plan: TransactionPlan, stored_tree: StoredTree) -> WasmResult<W
         .into());
     }
 
-    let note_commitments: Vec<StateCommitment> = planned_spends(&plan)
+    let mut note_commitments: Vec<StateCommitment> = planned_spends(&plan)
         .into_iter()
         .filter(|plan| plan.note.amount() != 0u64.into())
         .map(|spend| spend.note.commit())
         .collect();
 
+    note_commitments.extend(plan.actions.iter().filter_map(|action| match action {
+        ActionPlan::Transfer(plan) => plan.accumulator_prior_commitment(),
+        ActionPlan::ShieldedIcs20Withdrawal(plan) => plan.accumulator_prior_commitment(),
+        ActionPlan::ShieldedHostWithdrawal(plan) => plan.accumulator_prior_commitment(),
+        _ => None,
+    }));
     let anchor = sct.root();
     let auth_paths = note_commitments
         .iter()
@@ -132,7 +138,8 @@ fn build_action_proof_request_inner(
     let recent_position_floor = transaction_plan.recent_position_floor()?;
     let request = match action_plan {
         ActionPlan::Transfer(plan) => {
-            let auth_paths = transfer_auth_paths(&plan.spends, &witness)?;
+            let auth_paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
             ProofRequest {
                 family: "transfer",
                 witness: plan.transfer_witness_payload(
@@ -144,7 +151,8 @@ fn build_action_proof_request_inner(
             }
         }
         ActionPlan::ShieldedIcs20Withdrawal(plan) => {
-            let auth_paths = transfer_auth_paths(&plan.spends, &witness)?;
+            let auth_paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
             ProofRequest {
                 family: "shielded_ics20_withdrawal",
                 witness: plan.shielded_ics20_withdrawal_witness_payload(
@@ -156,7 +164,8 @@ fn build_action_proof_request_inner(
             }
         }
         ActionPlan::ShieldedHostWithdrawal(plan) => {
-            let auth_paths = transfer_auth_paths(&plan.spends, &witness)?;
+            let auth_paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
             let (public, private) = plan.shielded_host_withdrawal_public_private(
                 &full_viewing_key,
                 &auth_paths,
@@ -167,7 +176,7 @@ fn build_action_proof_request_inner(
                 // Host withdrawals deliberately reuse the canonical shielded
                 // withdrawal circuit and prover artifact.
                 family: "shielded_ics20_withdrawal",
-                witness: encode_shielded_ics20_withdrawal_witness_v12(&public, &private)?,
+                witness: encode_shielded_ics20_withdrawal_witness(&public, &private)?,
             }
         }
         other => {
@@ -221,7 +230,8 @@ fn build_action_with_proof_result_inner(
 
     let action = match action_plan {
         ActionPlan::Transfer(plan) => {
-            let auth_paths = transfer_auth_paths(&plan.spends, &witness)?;
+            let auth_paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
             let expected_witness = plan.transfer_witness_payload(
                 &full_viewing_key,
                 auth_paths,
@@ -229,7 +239,7 @@ fn build_action_with_proof_result_inner(
                 recent_position_floor,
             )?;
             let expected = Fq::from_le_bytes_mod_order(
-                &decode_transfer_witness_v20(&expected_witness)?.claimed_statement_hash,
+                &decode_transfer_witness(&expected_witness)?.claimed_statement_hash,
             );
             let (claimed, proof) = translate_transfer_proof_result(proof_result)?;
             if claimed != expected {
@@ -248,7 +258,8 @@ fn build_action_with_proof_result_inner(
             )?)
         }
         ActionPlan::ShieldedIcs20Withdrawal(plan) => {
-            let auth_paths = transfer_auth_paths(&plan.spends, &witness)?;
+            let auth_paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
             let expected_witness = plan.shielded_ics20_withdrawal_witness_payload(
                 &full_viewing_key,
                 auth_paths,
@@ -256,7 +267,7 @@ fn build_action_with_proof_result_inner(
                 recent_position_floor,
             )?;
             let expected = Fq::from_le_bytes_mod_order(
-                &decode_shielded_ics20_withdrawal_witness_v12(&expected_witness)?
+                &decode_shielded_ics20_withdrawal_witness(&expected_witness)?
                     .claimed_statement_hash,
             );
             let (claimed, proof) = translate_shielded_ics20_withdrawal_proof_result(
@@ -281,16 +292,17 @@ fn build_action_with_proof_result_inner(
             )
         }
         ActionPlan::ShieldedHostWithdrawal(plan) => {
-            let auth_paths = transfer_auth_paths(&plan.spends, &witness)?;
+            let auth_paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
             let (public, private) = plan.shielded_host_withdrawal_public_private(
                 &full_viewing_key,
                 &auth_paths,
                 anchor,
                 recent_position_floor,
             )?;
-            let expected_witness = encode_shielded_ics20_withdrawal_witness_v12(&public, &private)?;
+            let expected_witness = encode_shielded_ics20_withdrawal_witness(&public, &private)?;
             let expected = Fq::from_le_bytes_mod_order(
-                &decode_shielded_ics20_withdrawal_witness_v12(&expected_witness)?
+                &decode_shielded_ics20_withdrawal_witness(&expected_witness)?
                     .claimed_statement_hash,
             );
             let (claimed, proof) = translate_shielded_ics20_withdrawal_proof_result(
@@ -406,12 +418,14 @@ fn memo_key(transaction_plan: &TransactionPlan) -> PayloadKey {
 
 fn transfer_auth_paths(
     spends: &[shieldd_shielded_pool::ShieldedInputPlan],
+    accumulator: Option<StateCommitment>,
     witness: &WitnessData,
 ) -> WasmResult<Vec<tct::Proof>> {
     spends
         .iter()
-        .map(|spend| {
-            let note_commitment = spend.note.commit();
+        .map(|spend| spend.note.commit())
+        .chain(accumulator)
+        .map(|note_commitment| {
             witness
                 .state_commitment_proofs
                 .get(&note_commitment)
