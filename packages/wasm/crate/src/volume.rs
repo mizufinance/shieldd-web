@@ -12,10 +12,23 @@ use shieldd_tct::{Position, StateCommitment};
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "VolumeAccumulatorState")]
 struct StoredVolume {
+    #[serde(with = "field_bytes")]
     subject: Fq,
     day_start: u64,
     undisclosed_volume: u128,
+    #[serde(with = "field_bytes")]
     blinding: Fq,
+}
+
+mod field_bytes {
+    use super::*;
+    pub fn serialize<S: serde::Serializer>(field: &Fq, serializer: S) -> Result<S::Ok, S::Error> {
+        field.to_bytes().serialize(serializer)
+    }
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Fq, D::Error> {
+        let bytes = <[u8; 32]>::deserialize(deserializer)?;
+        Fq::from_bytes_checked(&bytes).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -264,6 +277,9 @@ mod tests {
         journal
             .confirm(state, payload.commitment, Position::from(5u64))
             .unwrap();
+        let encoded = serde_json::to_vec(&journal).unwrap();
+        let journal_copy: VolumeJournal = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(journal_copy.tips[0].state, journal.tips[0].state);
         let continuation = journal.plan(&witness, &fvk, timestamp, 30, true).unwrap();
         assert_eq!(
             continuation.successor_state().unwrap().undisclosed_volume,
