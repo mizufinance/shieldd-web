@@ -1,7 +1,8 @@
-import { upgradeOrbisAuditPackage } from './orbis.js';
-import type { LegacyOrbisAuditPackage, OrbisAuditPackage } from './orbis.js';
-export { upgradeOrbisAuditPackage } from './orbis.js';
-export type { LegacyOrbisAuditPackage, OrbisAuditPackage } from './orbis.js';
+import {
+  upgradeOrbisAuditPackage,
+  type LegacyOrbisAuditPackage,
+  type OrbisAuditPackage,
+} from './orbis.js';
 import { Address } from '@mizufinance/protobuf/shieldd/core/keys/v1/keys_pb';
 import { AssetId } from '@mizufinance/protobuf/shieldd/core/asset/v1/asset_pb';
 import {
@@ -16,6 +17,12 @@ import {
   pocSignDevAssetRegistration,
 } from '../wasm/index.js';
 import { ensureWasmInitialized } from './init.js';
+
+export {
+  upgradeOrbisAuditPackage,
+  type LegacyOrbisAuditPackage,
+  type OrbisAuditPackage,
+} from './orbis.js';
 
 export interface OrbisTierBundle {
   sender_core: OrbisAuditPackage;
@@ -56,14 +63,12 @@ export const pocOrbisAuditBundles = async (
   plan: Uint8Array,
 ): Promise<LocatedOrbisAuditBundle[]> => {
   await ensureWasmInitialized();
-  const bundles = pocOrbisAuditBundlesWasm(plan) as Array<
-    Omit<LocatedOrbisAuditBundle, 'bundle'> & {
-      bundle: {
-        subject: Parameters<typeof bindTier>[0];
-        investigation: Parameters<typeof bindTier>[0];
-      };
-    }
-  >;
+  const bundles = pocOrbisAuditBundlesWasm(plan) as (Omit<LocatedOrbisAuditBundle, 'bundle'> & {
+    bundle: {
+      subject: Parameters<typeof bindTier>[0];
+      investigation: Parameters<typeof bindTier>[0];
+    };
+  })[];
   return Promise.all(
     bundles.map(async located => ({
       ...located,

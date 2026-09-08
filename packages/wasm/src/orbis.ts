@@ -28,12 +28,13 @@ export type OrbisAuditPackage = Omit<LegacyOrbisAuditPackage, 'transfer_shared_f
 const FQ_MODULUS = BigInt('0x12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001');
 const TRANSFER_SEED_BINDING_DOMAIN = new TextEncoder().encode('shieldd-transfer-seed-binding-v1');
 const littleEndianBigInt = (value: number[] | Uint8Array) =>
-  Array.from(value).reduceRight((result, byte) => (result << 8n) | BigInt(byte), 0n);
+  Array.from(value).reduceRight((result, byte) => result * 256n + BigInt(byte), 0n);
 const littleEndianBytes = (value: bigint) => {
-  const result = new Array(32);
+  const result: number[] = Array<number>(32).fill(0);
+  let remaining = value;
   for (let index = 0; index < result.length; index += 1) {
-    result[index] = Number(value & 0xffn);
-    value >>= 8n;
+    result[index] = Number(remaining % 256n);
+    remaining /= 256n;
   }
   return result;
 };
