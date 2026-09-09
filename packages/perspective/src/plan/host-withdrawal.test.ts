@@ -5,7 +5,7 @@ import { Amount } from '@mizufinance/protobuf/shieldd/core/num/v1/num_pb';
 import { createHostWithdrawalRequest } from './host-withdrawal.js';
 
 describe('createHostWithdrawalRequest()', () => {
-  test('builds a native host transfer without an ICS-20 withdrawal', () => {
+  test('builds a native host transfer', () => {
     const source = new AddressIndex({ account: 7 });
     const value = new Value({
       amount: new Amount({ lo: 42n }),
@@ -18,7 +18,6 @@ describe('createHostWithdrawalRequest()', () => {
       source,
     });
 
-    expect(request.ics20Withdrawals).toHaveLength(0);
     expect(request.hostWithdrawals).toHaveLength(1);
     expect(request.hostWithdrawals[0]?.value?.equals(value)).toBe(true);
     expect(request.hostWithdrawals[0]?.destination).toEqual({

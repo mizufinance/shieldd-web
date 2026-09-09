@@ -50,8 +50,10 @@ export const TransactionSummary = ({
   as: Container = 'div',
   hideMemo = false,
 }: TransactionSummaryProps) => {
-  const { label, assets, additionalText, address, memo, type, tickers, effects } =
-    useClassification(info, getMetadata);
+  const { label, assets, additionalText, address, memo, tickers, effects } = useClassification(
+    info,
+    getMetadata,
+  );
 
   // Calculate total rows: 1 (main info) + effects count + memo (if present)
   const totalRows = 1 + effects.length + (memo && !hideMemo ? 1 : 0);
@@ -87,14 +89,7 @@ export const TransactionSummary = ({
               ))}
             </Pill>
             {additionalText && <Text detailTechnical>{additionalText}</Text>}
-            {address && (
-              <AddressViewComponent
-                truncate
-                hideIcon
-                addressView={address}
-                external={type === 'ibcRelayAction'}
-              />
-            )}
+            {address && <AddressViewComponent truncate hideIcon addressView={address} />}
           </Density>
         </div>
 
