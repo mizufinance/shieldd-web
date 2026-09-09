@@ -8,8 +8,8 @@ use shieldd_num::Amount;
 use shieldd_proto::view::v1::TransactionPlannerRequest;
 use shieldd_proto::{DomainType, Message};
 use shieldd_shielded_pool::{
-    HostWithdrawal, Ics20Withdrawal, ShieldedHostWithdrawalPlan, ShieldedIcs20WithdrawalPlan,
-    ShieldedInputPlan, ShieldedOutputPlan, TransferPlan, PADDED_TRANSFER_INPUTS,
+    HostWithdrawal, ShieldedHostWithdrawalPlan, ShieldedInputPlan, ShieldedOutputPlan,
+    TransferPlan, PADDED_TRANSFER_INPUTS,
 };
 use shieldd_transaction::memo::MemoPlaintext;
 use shieldd_transaction::{plan::MemoPlan, ActionPlan, TransactionParameters, TransactionPlan};
@@ -92,10 +92,7 @@ pub async fn plan_transaction_inner<Db: Database>(
     recent_position_floor: u64,
 ) -> WasmResult<TransactionPlan> {
     if !request.host_withdrawals.is_empty() {
-        if !request.outputs.is_empty()
-            || !request.ics20_withdrawals.is_empty()
-            || !request.ibc_relay_actions.is_empty()
-        {
+        if !request.outputs.is_empty() {
             return Err(anyhow!(
                 "host withdrawals cannot be mixed with other transaction planner actions"
             )
@@ -151,19 +148,6 @@ pub async fn plan_transaction_inner<Db: Database>(
         actions.push(ActionPlan::Transfer(action));
     }
 
-    for withdrawal in request.ics20_withdrawals {
-        let withdrawal: Ics20Withdrawal = withdrawal.try_into()?;
-        let action = plan_ics20_withdrawal(
-            &storage,
-            source,
-            withdrawal,
-            recent_position_floor,
-            &context,
-        )
-        .await?;
-        actions.push(ActionPlan::ShieldedIcs20Withdrawal(action));
-    }
-
     for withdrawal in request.host_withdrawals {
         let withdrawal: HostWithdrawal = withdrawal.try_into()?;
         let action = plan_host_withdrawal(
@@ -175,10 +159,6 @@ pub async fn plan_transaction_inner<Db: Database>(
         )
         .await?;
         actions.push(ActionPlan::ShieldedHostWithdrawal(action));
-    }
-
-    if !request.ibc_relay_actions.is_empty() {
-        return Err(anyhow!("IBC relay action planning is not supported in browser wasm").into());
     }
 
     if actions.is_empty() {
@@ -308,74 +288,6 @@ async fn plan_transfer<Db: Database>(
         },
         volume,
         shieldd_shielded_pool::TransferProofContext::Ordinary,
-        context.routing.clone(),
-    )?)
-}
-
-async fn plan_ics20_withdrawal<Db: Database>(
-    storage: &Storage<Db>,
-    source: AddressIndex,
-    withdrawal: Ics20Withdrawal,
-    recent_position_floor: u64,
-    context: &PlanningContext<'_>,
-) -> WasmResult<ShieldedIcs20WithdrawalPlan> {
-    let asset_id = withdrawal.denom.id();
-    let selected = select_notes(
-        storage,
-        source,
-        asset_id,
-        withdrawal.amount,
-        recent_position_floor,
-    )
-    .await?;
-    ensure_withdrawal_input_limit(selected.len())?;
-    let total = selected
-        .iter()
-        .map(|record| record.note.amount())
-        .sum::<Amount>();
-    let change = total - withdrawal.amount;
-    let sender = selected
-        .first()
-        .map(|record| record.note.address())
-        .ok_or_else(|| anyhow!("withdraw requires at least one spend"))?;
-
-    let spends = selected
-        .iter()
-        .map(|record| ShieldedInputPlan::new(&mut OsRng, record.note.clone(), record.position))
-        .collect::<Vec<_>>();
-    let change_output = (change > Amount::zero()).then(|| {
-        ShieldedOutputPlan::new(
-            &mut OsRng,
-            Value {
-                amount: change,
-                asset_id,
-            },
-            sender,
-        )
-    });
-
-    let batch = compliance_batch(context, &spends, change_output.as_slice()).await?;
-    let witness = crate::compliance::action_witness(&batch, &spends)?;
-    let volume = storage
-        .volume_plan(
-            &witness,
-            context.fvk,
-            context.timestamp,
-            withdrawal.amount.value(),
-            true,
-        )
-        .await?;
-    Ok(ShieldedIcs20WithdrawalPlan::new(
-        spends,
-        change_output,
-        withdrawal,
-        Fr::rand(&mut OsRng),
-        shieldd_shielded_pool::WithdrawalContext {
-            witness,
-            timestamp: context.timestamp,
-            nonce: Fr::rand(&mut OsRng),
-        },
-        volume,
         context.routing.clone(),
     )?)
 }
