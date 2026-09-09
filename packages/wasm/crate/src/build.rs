@@ -9,11 +9,11 @@ use shieldd_keys::{keys::SpendKey, symmetric::PayloadKey, FullViewingKey};
 use shieldd_proto::DomainType;
 use shieldd_shielded_pool::{
     gnark::{
-        decode_shielded_ics20_withdrawal_witness, decode_transfer_witness,
-        encode_shielded_ics20_withdrawal_witness, translate_shielded_ics20_withdrawal_proof_result,
+        decode_shielded_withdrawal_witness, decode_transfer_witness,
+        encode_shielded_withdrawal_witness, translate_shielded_withdrawal_proof_result,
         translate_transfer_proof_result,
     },
-    ShieldedIcs20WithdrawalFamilyId,
+    ShieldedWithdrawalFamilyId,
 };
 use shieldd_tct::{self as tct, Proof, StateCommitment};
 use shieldd_transaction::{
@@ -73,7 +73,6 @@ fn witness_inner(plan: TransactionPlan, stored_tree: StoredTree) -> WasmResult<W
 
     note_commitments.extend(plan.actions.iter().filter_map(|action| match action {
         ActionPlan::Transfer(plan) => plan.accumulator_prior_commitment(),
-        ActionPlan::ShieldedIcs20Withdrawal(plan) => plan.accumulator_prior_commitment(),
         ActionPlan::ShieldedHostWithdrawal(plan) => plan.accumulator_prior_commitment(),
         _ => None,
     }));
@@ -150,19 +149,6 @@ fn build_action_proof_request_inner(
                 )?,
             }
         }
-        ActionPlan::ShieldedIcs20Withdrawal(plan) => {
-            let auth_paths =
-                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
-            ProofRequest {
-                family: "shielded_ics20_withdrawal",
-                witness: plan.shielded_ics20_withdrawal_witness_payload(
-                    &full_viewing_key,
-                    auth_paths,
-                    anchor,
-                    recent_position_floor,
-                )?,
-            }
-        }
         ActionPlan::ShieldedHostWithdrawal(plan) => {
             let auth_paths =
                 transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
@@ -175,8 +161,8 @@ fn build_action_proof_request_inner(
             ProofRequest {
                 // Host withdrawals deliberately reuse the canonical shielded
                 // withdrawal circuit and prover artifact.
-                family: "shielded_ics20_withdrawal",
-                witness: encode_shielded_ics20_withdrawal_witness(&public, &private)?,
+                family: "shielded_withdrawal",
+                witness: encode_shielded_withdrawal_witness(&public, &private)?,
             }
         }
         other => {
@@ -257,40 +243,6 @@ fn build_action_with_proof_result_inner(
                 recent_position_floor,
             )?)
         }
-        ActionPlan::ShieldedIcs20Withdrawal(plan) => {
-            let auth_paths =
-                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
-            let expected_witness = plan.shielded_ics20_withdrawal_witness_payload(
-                &full_viewing_key,
-                auth_paths,
-                anchor,
-                recent_position_floor,
-            )?;
-            let expected = Fq::from_le_bytes_mod_order(
-                &decode_shielded_ics20_withdrawal_witness(&expected_witness)?
-                    .claimed_statement_hash,
-            );
-            let (claimed, proof) = translate_shielded_ics20_withdrawal_proof_result(
-                proof_result,
-                ShieldedIcs20WithdrawalFamilyId::Canonical,
-            )?;
-            if claimed != expected {
-                return Err(anyhow!(
-                    "shielded ICS-20 withdrawal proof result statement hash mismatch: expected {expected}, got {claimed}"
-                )
-                .into());
-            }
-            Action::ShieldedIcs20Withdrawal(
-                plan.build_unauth_shielded_ics20_withdrawal_with_proof(
-                    &full_viewing_key,
-                    vec![[0u8; 64].into(); plan.spends.len()],
-                    anchor,
-                    &memo_key,
-                    proof,
-                    recent_position_floor,
-                )?,
-            )
-        }
         ActionPlan::ShieldedHostWithdrawal(plan) => {
             let auth_paths =
                 transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
@@ -300,14 +252,13 @@ fn build_action_with_proof_result_inner(
                 anchor,
                 recent_position_floor,
             )?;
-            let expected_witness = encode_shielded_ics20_withdrawal_witness(&public, &private)?;
+            let expected_witness = encode_shielded_withdrawal_witness(&public, &private)?;
             let expected = Fq::from_le_bytes_mod_order(
-                &decode_shielded_ics20_withdrawal_witness(&expected_witness)?
-                    .claimed_statement_hash,
+                &decode_shielded_withdrawal_witness(&expected_witness)?.claimed_statement_hash,
             );
-            let (claimed, proof) = translate_shielded_ics20_withdrawal_proof_result(
+            let (claimed, proof) = translate_shielded_withdrawal_proof_result(
                 proof_result,
-                ShieldedIcs20WithdrawalFamilyId::Canonical,
+                ShieldedWithdrawalFamilyId::Canonical,
             )?;
             if claimed != expected {
                 return Err(anyhow!(
@@ -442,7 +393,6 @@ fn planned_spends(plan: &TransactionPlan) -> Vec<&shieldd_shielded_pool::Shielde
         match action {
             ActionPlan::Transfer(plan) => spends.extend(plan.spends.iter()),
             ActionPlan::NoteReshape(plan) => spends.extend(plan.spends.iter()),
-            ActionPlan::ShieldedIcs20Withdrawal(plan) => spends.extend(plan.spends.iter()),
             ActionPlan::ShieldedHostWithdrawal(plan) => spends.extend(plan.spends.iter()),
             _ => {}
         }
@@ -593,7 +543,7 @@ mod tests {
         let request =
             build_action_proof_request_inner(transaction_plan, action_plan, fvk, witness).unwrap();
 
-        assert_eq!(request.family, "shielded_ics20_withdrawal");
+        assert_eq!(request.family, "shielded_withdrawal");
         assert!(!request.witness.is_empty());
     }
 }

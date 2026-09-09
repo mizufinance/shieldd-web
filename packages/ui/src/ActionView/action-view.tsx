@@ -4,7 +4,6 @@ import { ActionViewBaseProps, ActionViewType, ActionViewValueType, GetMetadata }
 import { UnknownAction } from './actions/unknown';
 
 import { HostWithdrawalAction } from './actions/host-withdrawal';
-import { IbcRelayAction } from './actions/ibc-relay';
 
 export interface ActionViewProps extends ActionViewBaseProps {
   action: ActionViewMessage;
@@ -12,7 +11,6 @@ export interface ActionViewProps extends ActionViewBaseProps {
 
 const componentMap = {
   shieldedHostWithdrawal: HostWithdrawalAction,
-  ibcRelayAction: IbcRelayAction,
   unknown: UnknownAction,
 } as const satisfies Partial<Record<ActionViewType | 'unknown', unknown>>;
 

@@ -122,9 +122,7 @@ export class TransactionsStore {
 
       const classification = classifyTransaction(tx.view);
 
-      return (
-        classification.type === 'ibcRelayAction' || classification.type === 'shieldedHostWithdrawal'
-      );
+      return classification.type === 'shieldedHostWithdrawal';
     });
   }
 
