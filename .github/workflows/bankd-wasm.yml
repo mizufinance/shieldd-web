@@ -19,6 +19,7 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts --child-concurrency=1 --network-concurrency=1 --filter @mizufinance/wasm... --filter @mizufinance/protobuf...
       - name: Generate protocol bindings
         run: |
+          pnpm --filter @mizufinance/protobuf run gen:cosmos-sdk
           pnpm --filter @mizufinance/protobuf run gen:shieldd
           pnpm --filter @mizufinance/protobuf run gen:ibc
           pnpm --filter @mizufinance/protobuf run gen:host
