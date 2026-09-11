@@ -14,14 +14,14 @@ mock-database = []
 decaf377-rdsa = "0.11"
 shieldd-asset = { path = "../../../vendor/shieldd/crates/core/asset", package = "shieldd-sdk-asset" }
 shieldd-compact-block = { path = "../../../vendor/shieldd/crates/core/component/compact-block", package = "shieldd-sdk-compact-block", default-features = false }
-shieldd-compliance = { path = "../../../vendor/shieldd/crates/core/component/compliance", package = "shieldd-sdk-compliance", default-features = false, features = ["poc-orbis"] }
+shieldd-compliance = { path = "../../../vendor/shieldd/crates/core/component/compliance", package = "shieldd-sdk-compliance", default-features = false }
 shieldd-fee = { path = "../../../vendor/shieldd/crates/core/component/fee", package = "shieldd-sdk-fee", default-features = false }
 shieldd-keys = { path = "../../../vendor/shieldd/crates/core/keys", package = "shieldd-sdk-keys" }
 shieldd-num = { path = "../../../vendor/shieldd/crates/core/num", package = "shieldd-sdk-num" }
 shieldd-proof-params = { path = "../../../vendor/shieldd/crates/crypto/proof-params", package = "shieldd-sdk-proof-params", default-features = false }
 shieldd-proto = { path = "../../../vendor/shieldd/crates/proto", package = "shieldd-sdk-proto", default-features = false }
 shieldd-sct = { path = "../../../vendor/shieldd/crates/core/component/sct", package = "shieldd-sdk-sct", default-features = false }
-shieldd-shielded-pool = { path = "../../../vendor/shieldd/crates/core/component/shielded-pool", package = "shieldd-sdk-shielded-pool", default-features = false, features = ["poc-orbis"] }
+shieldd-shielded-pool = { path = "../../../vendor/shieldd/crates/core/component/shielded-pool", package = "shieldd-sdk-shielded-pool", default-features = false }
 shieldd-tct = { path = "../../../vendor/shieldd/crates/crypto/tct", package = "shieldd-sdk-tct" }
 shieldd-transaction = { path = "../../../vendor/shieldd/crates/core/transaction", package = "shieldd-sdk-transaction", default-features = false }
 

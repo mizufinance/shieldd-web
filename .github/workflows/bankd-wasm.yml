@@ -2,7 +2,7 @@ name: Bankd WASM
 on:
   workflow_dispatch:
   push:
-    branches: [codex/bankd-shieldd-wasm-sync]
+    branches: [codex/disclosure-integration]
 jobs:
   wasm:
     runs-on: ubuntu-24.04
@@ -14,8 +14,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Verify Orbis seed-binding bridge
-        run: node --test packages/wasm/tests/orbis-bridge.node.mjs
+      - uses: pnpm/action-setup@v4
+      - name: Install SDK dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts --child-concurrency=1 --network-concurrency=1 --filter @mizufinance/wasm... --filter @mizufinance/protobuf...
+      - name: Generate protocol bindings
+        run: |
+          pnpm --filter @mizufinance/protobuf run gen:shieldd
+          pnpm --filter @mizufinance/protobuf run gen:ibc
+          pnpm --filter @mizufinance/protobuf run gen:host
       - uses: dtolnay/rust-toolchain@1.89.0
         with:
           targets: wasm32-unknown-unknown
@@ -27,18 +33,21 @@ jobs:
           tool: wasm-pack@0.13.1
       - name: Compile tracked browser source
         working-directory: packages/wasm/crate
-        run: wasm-pack build --no-pack --target web --out-name index --out-dir ../wasm --no-opt
+        run: CARGO_BUILD_JOBS=1 RAYON_NUM_THREADS=1 wasm-pack build --dev --no-pack --target web --out-name index --out-dir ../wasm --no-opt
       - name: Check dependency lock
         run: git diff --exit-code -- packages/wasm/crate/Cargo.lock
+      - name: Build TypeScript SDK
+        run: pnpm --filter @mizufinance/wasm... --workspace-concurrency=1 run build
       - name: Verify shipped admin API vectors
         run: node packages/wasm/tests/admin-api.mjs
       - name: Record source revisions
         run: |
+          printf 'development\n' > packages/wasm/wasm/build-profile.txt
           git rev-parse HEAD > packages/wasm/wasm/source-revision.txt
           git -C vendor/shieldd rev-parse HEAD > packages/wasm/wasm/shieldd-revision.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: bankd-wasm
+          name: bankd-wasm-development
           path: |
             packages/wasm/wasm/
             packages/wasm/crate/Cargo.lock
