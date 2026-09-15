@@ -1,7 +1,7 @@
 # Disclosure SDK
 
 The `codex/disclosure-integration` branch pins Shieldd
-`6165357db836b977ce2cfc03f5e167afbfb13ac8`. Transaction planning, witness
+`6e4140fd28c0c8e3082c616a3fa60b8b516cf603`. Transaction planning, witness
 encoding, registration validation and scanning use that Rust dependency.
 
 The ring bundle contains independent amount, sender-address, receiver-address
