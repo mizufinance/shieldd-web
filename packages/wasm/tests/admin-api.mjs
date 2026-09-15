@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   AssetPolicy,
+  ComplianceLeaf,
   MsgRegisterAsset,
   MsgRegisterUser,
 } from '@mizufinance/protobuf/shieldd/core/component/compliance/v1/compliance_pb';
+// Generated bindings must not expose the removed per-person key bundle.
+assert.equal(ComplianceLeaf.fields.find(9), undefined);
+assert.equal('auditKeys' in new ComplianceLeaf(), false);
 const nativeUrl = new URL('../wasm/index.js', import.meta.url);
 const api = await import(nativeUrl.href);
 await api.default({ module_or_path: await readFile(new URL('index_bg.wasm', nativeUrl)) });
@@ -27,4 +31,4 @@ assert.throws(() =>
     now,
   ),
 );
-console.log('WASM wallet address vector preserved; unsigned registration rejected.');
+console.log('Current registration schema loaded; WASM wallet address vector preserved; unsigned registration rejected.');

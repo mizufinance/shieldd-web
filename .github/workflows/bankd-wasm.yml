@@ -35,6 +35,9 @@ jobs:
       - name: Compile tracked browser source
         working-directory: packages/wasm/crate
         run: CARGO_BUILD_JOBS=1 RAYON_NUM_THREADS=1 wasm-pack build --dev --no-pack --target web --out-name index --out-dir ../wasm --no-opt
+      - name: Test Rust wrappers
+        working-directory: packages/wasm/crate
+        run: CARGO_BUILD_JOBS=2 RAYON_NUM_THREADS=2 cargo test --locked --lib -- --test-threads=2
       - name: Check dependency lock
         run: git diff --exit-code -- packages/wasm/crate/Cargo.lock
       - name: Build TypeScript SDK

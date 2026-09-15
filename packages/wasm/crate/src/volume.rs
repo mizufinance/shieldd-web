@@ -205,6 +205,7 @@ mod tests {
             amount: decaf377::Element::GENERATOR * decaf377::Fr::from(201u64),
             sender: decaf377::Element::GENERATOR * decaf377::Fr::from(202u64),
             receiver: decaf377::Element::GENERATOR * decaf377::Fr::from(203u64),
+            checking: decaf377::Element::GENERATOR * decaf377::Fr::from(204u64),
         }
     }
 
@@ -228,7 +229,6 @@ mod tests {
             ring_pk,
             rnk_dh_pk,
             rnk,
-            audit_keys(),
         )
         .unwrap();
         let policy = AssetPolicy::new(

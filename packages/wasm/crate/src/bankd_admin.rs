@@ -21,7 +21,7 @@ pub fn validate_asset_registration(
             message
                 .audit_certificate
                 .as_ref()
-                .ok_or_else(|| anyhow!("missing general audit-key certificate"))?
+                .ok_or_else(|| anyhow!("missing ring encryption-key certificate"))?
                 .verify_general(message.asset_id, &policy, &chain_id)?;
         } else {
             anyhow::ensure!(
@@ -48,7 +48,7 @@ pub fn validate_user_registration(
         message
             .capability_certificate
             .as_ref()
-            .ok_or_else(|| anyhow!("missing person audit-key certificate"))?
+            .ok_or_else(|| anyhow!("missing registration capability certificate"))?
             .verify(&message.leaf, &policy, &chain_id)?;
         Ok(message.encode_to_vec())
     })();
