@@ -31,4 +31,6 @@ assert.throws(() =>
     now,
   ),
 );
-console.log('Current registration schema loaded; WASM wallet address vector preserved; unsigned registration rejected.');
+console.log(
+  'Current registration schema loaded; WASM wallet address vector preserved; unsigned registration rejected.',
+);

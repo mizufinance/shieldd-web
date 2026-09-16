@@ -23,6 +23,12 @@ concurrency:
 # mostly, compiled wasm will restore from turbo cache
 # rust cache only used in rust jobs
 
+# CI exercises development keys; package publishing keeps the release approval gate.
+env:
+  SHIELDD_BUILD_PROFILE: dev
+  CARGO_BUILD_JOBS: 2
+  RAYON_NUM_THREADS: 2
+
 jobs:
   turbo-build:
     uses: ./.github/workflows/compile-wasm.yml
