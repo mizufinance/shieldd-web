@@ -42,6 +42,8 @@ const request = {
 };
 assert.throws(() => api.disclosure_prepare(JSON.stringify(request), '[]', fvk));
 request.outputs[0].spending_control = true;
+request.challenge = '11'.repeat(32);
+request.recipient = 'development-verifier';
 assert.throws(() => api.disclosure_prepare(JSON.stringify(request), '[]', fvk), /custody signatures/);
 assert.throws(() => api.disclosure_prepare(JSON.stringify(request), '[]', new Uint8Array()));
 assert.throws(() => api.disclosure_export('{}', 'openings'));
