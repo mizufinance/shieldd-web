@@ -10,6 +10,12 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 mock-database = []
 
+# Development keys require assertions, but wallet cryptography still needs optimization.
+[profile.dev]
+opt-level = 2
+debug = 0
+debug-assertions = true
+
 [dependencies]
 decaf377-rdsa = "0.11"
 shieldd-asset = { path = "../../../vendor/shieldd/crates/core/asset", package = "shieldd-sdk-asset" }
