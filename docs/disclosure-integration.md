@@ -14,7 +14,8 @@ protected Orbis delivery are unavailable.
 ## Building and checking
 
 Use Rust 1.89.0 and the committed Cargo.lock. Generate protocol bindings from
-`vendor/shieldd` with `pnpm --filter @mizufinance/protobuf run gen:shieldd`.
+`vendor/shieldd` and the pinned Cosmos/ICS23 dependencies with
+`pnpm --filter @mizufinance/protobuf proto`, then force the TypeScript rebuild.
 The Bankd WASM workflow builds development WASM, tests the Rust wrappers, builds
 the TypeScript packages and checks the shipped registration API. It records both
 repository revisions with the resulting artifact.
@@ -29,10 +30,12 @@ legacy format support.
 
 ## Bankd integration boundary
 
-Bankd must package the resulting WASM and regenerated protobufs with matching
-source provenance before enabling its browser/mobile transaction entry points.
-Its currently committed bundles remain disabled until that integration is
-verified. The authoritative requirements and acceptance criteria are in
+Bankd bundles matching development WASM and protobuf packages from SDK commit
+`80899a03b44c7ea4aa8dce391fea8aa99b62a7b7`. Browser and mobile transaction
+entry points are enabled. Real Chromium admin and mobile WebView transfers
+were proved and accepted by a local Bankd node. Reproduction and reset steps
+are in [Bankd SDK.md](https://github.com/mizufinance/bankd/blob/codex/disclosure-integration/tests/e2e/SDK.md).
+The authoritative requirements and acceptance criteria are in
 [Bankd GAPS.md](https://github.com/mizufinance/bankd/blob/codex/disclosure-integration/infra/disclosure-audit/GAPS.md),
 including SDK-1 and the Orbis/Defra limitations.
 
@@ -46,6 +49,7 @@ Local verification on 2026-09-15 passed with Rust 1.89.0:
 - Shipped WASM address vector, unsigned-registration rejection and generated
   registration-schema checks.
 
-No release-mode prover, browser/mobile transaction acceptance or live PET check
-was run for this SDK update. Shieldd's native proving/acceptance verification is
-recorded separately in Bankd's disclosure verification report.
+Bankd integration additionally verified real browser/WebView transaction
+acceptance with development proofs. No release-mode proof setup, physical
+iOS/Android WebView or live PET check was run. Exact results are recorded in
+Bankd's disclosure verification report.
