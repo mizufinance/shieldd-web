@@ -223,14 +223,8 @@ mod tests {
             rnk_dh_pk,
         )
         .unwrap();
-        let leaf = ComplianceLeaf::registered_from_rnk(
-            address,
-            asset_id,
-            ring_pk,
-            rnk_dh_pk,
-            rnk,
-        )
-        .unwrap();
+        let leaf = ComplianceLeaf::registered_from_rnk(address, asset_id, ring_pk, rnk_dh_pk, rnk)
+            .unwrap();
         let policy = AssetPolicy::new(
             ring_pk,
             100,
