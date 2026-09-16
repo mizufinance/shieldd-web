@@ -2680,6 +2680,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "shieldd-sdk-disclosure"
+version = "2.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "decaf377",
+ "decaf377-ka",
+ "decaf377-rdsa",
+ "hex",
+ "num-bigint",
+ "poseidon377",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "shieldd-sdk-asset",
+ "shieldd-sdk-compliance",
+ "shieldd-sdk-keys",
+ "shieldd-sdk-proto",
+ "shieldd-sdk-shielded-pool",
+ "shieldd-sdk-transaction",
+]
+
+[[package]]
 name = "shieldd-sdk-fee"
 version = "2.1.0"
 dependencies = [
@@ -2993,6 +3017,7 @@ dependencies = [
  "shieldd-sdk-asset",
  "shieldd-sdk-compact-block",
  "shieldd-sdk-compliance",
+ "shieldd-sdk-disclosure",
  "shieldd-sdk-fee",
  "shieldd-sdk-keys",
  "shieldd-sdk-num",

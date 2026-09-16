@@ -34,3 +34,19 @@ assert.throws(() =>
 console.log(
   'Current registration schema loaded; WASM wallet address vector preserved; unsigned registration rejected.',
 );
+// The shipped WASM surface rejects unsupported capabilities and missing witnesses.
+const request = {
+  version: 1, chain_id: 'chain', recipient: null, challenge: null, total: null,
+  outputs: [{ reference: { transaction_id: '00'.repeat(32), height: 1, action: { Body: 0 }, output: 0 },
+    amount: true, asset: true, recipient: true, predicate: null, memo: false, spending_control: false }],
+};
+assert.throws(() => api.disclosure_prepare(JSON.stringify(request), '[]', fvk));
+request.outputs[0].spending_control = true;
+assert.throws(() => api.disclosure_prepare(JSON.stringify(request), '[]', fvk), /custody signatures/);
+assert.throws(() => api.disclosure_prepare(JSON.stringify(request), '[]', new Uint8Array()));
+assert.throws(() => api.disclosure_export('{}', 'openings'));
+assert.throws(() => api.disclosure_export('{}', 'zk'));
+assert.throws(() => api.disclosure_inspect('{}'));
+assert.throws(() => api.disclosure_verify('{}'));
+assert.throws(() => api.disclosure_confirm_acceptance('{}', 'chain', '[]'));
+console.log('Shipped WASM disclosure rejects missing witnesses and unsupported custody capabilities.');
