@@ -19,10 +19,7 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts --child-concurrency=1 --network-concurrency=1 --filter @mizufinance/wasm... --filter @mizufinance/protobuf...
       - name: Generate protocol bindings
         run: |
-          pnpm --filter @mizufinance/protobuf run gen:cosmos-sdk
-          pnpm --filter @mizufinance/protobuf run gen:shieldd
-          pnpm --filter @mizufinance/protobuf run gen:ibc
-          pnpm --filter @mizufinance/protobuf run gen:host
+          pnpm --filter @mizufinance/protobuf run proto
       - uses: dtolnay/rust-toolchain@1.89.0
         with:
           targets: wasm32-unknown-unknown
@@ -42,6 +39,8 @@ jobs:
         run: git diff --exit-code -- packages/wasm/crate/Cargo.lock
       - name: Build TypeScript SDK
         run: pnpm --filter @mizufinance/wasm... --workspace-concurrency=1 run build
+      - name: Verify generated package dependency closure
+        run: node packages/protobuf/tests/packaging.mjs
       - name: Verify shipped admin API vectors
         run: node packages/wasm/tests/admin-api.mjs
       - name: Record source revisions
