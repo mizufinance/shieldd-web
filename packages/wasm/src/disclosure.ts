@@ -17,10 +17,17 @@ export async function prepareDisclosure(
   fullViewingKey: FullViewingKey,
 ): Promise<string> {
   await ensureWasmInitialized();
-  return disclosure_prepare(requestJson, JSON.stringify(committedTransactionsBase64), fullViewingKey.toBinary());
+  return disclosure_prepare(
+    requestJson,
+    JSON.stringify(committedTransactionsBase64),
+    fullViewingKey.toBinary(),
+  );
 }
 
-export async function exportDisclosure(witnessJson: string, method: DisclosureMethod): Promise<string> {
+export async function exportDisclosure(
+  witnessJson: string,
+  method: DisclosureMethod,
+): Promise<string> {
   await ensureWasmInitialized();
   return disclosure_export(witnessJson, method);
 }

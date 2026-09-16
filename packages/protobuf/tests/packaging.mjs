@@ -8,9 +8,17 @@ let checked = 0;
 for (const file of await readdir(root, { recursive: true })) {
   if (!file.endsWith('.js')) continue;
   const module = resolve(root, file);
-  for (const [, dependency] of (await readFile(module, 'utf8')).matchAll(/(?:from\s+|import\s*)['"](\.[^'"]+)['"]/g)) {
+  for (const [, dependency] of (await readFile(module, 'utf8')).matchAll(
+    /(?:from\s+|import\s*)['"](\.[^'"]+)['"]/g,
+  )) {
     const path = resolve(dirname(module), dependency);
-    assert.ok(await stat(path).then(value => value.isFile(), () => false), `${file} imports missing ${dependency}`);
+    assert.ok(
+      await stat(path).then(
+        value => value.isFile(),
+        () => false,
+      ),
+      `${file} imports missing ${dependency}`,
+    );
     checked++;
   }
 }
