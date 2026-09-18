@@ -1,4 +1,7 @@
-import { Transaction, TransactionPlan } from '@mizufinance/protobuf/shieldd/core/transaction/v1/transaction_pb';
+import {
+  Transaction,
+  TransactionPlan,
+} from '@mizufinance/protobuf/shieldd/core/transaction/v1/transaction_pb';
 import { prepare_orbis_packages } from '../wasm/index.js';
 import { ensureWasmInitialized } from './init.js';
 
@@ -42,7 +45,13 @@ export interface SealedAuditPackage {
   proof: { challenge: number[]; response: number[] };
 }
 
-export async function prepareOrbisPackages(plan: TransactionPlan, transaction: Transaction, delivery: OrbisDelivery): Promise<SealedAuditPackage[]> {
+export async function prepareOrbisPackages(
+  plan: TransactionPlan,
+  transaction: Transaction,
+  delivery: OrbisDelivery,
+): Promise<SealedAuditPackage[]> {
   await ensureWasmInitialized();
-  return JSON.parse(prepare_orbis_packages(plan.toBinary(), transaction.toBinary(), JSON.stringify(delivery))) as SealedAuditPackage[];
+  return JSON.parse(
+    prepare_orbis_packages(plan.toBinary(), transaction.toBinary(), JSON.stringify(delivery)),
+  ) as SealedAuditPackage[];
 }
