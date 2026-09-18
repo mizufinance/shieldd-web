@@ -70,3 +70,6 @@ assert.throws(() => api.disclosure_confirm_acceptance('{}', 'chain', '[]'));
 console.log(
   'Shipped WASM disclosure rejects missing witnesses and unsupported custody capabilities.',
 );
+assert.equal(typeof api.prepare_orbis_packages, 'function');
+assert.throws(() => api.prepare_orbis_packages(new Uint8Array(), new Uint8Array(), '{}'));
+console.log('Shipped Orbis package adapter is present and rejects missing transaction material.');

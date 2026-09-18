@@ -17,7 +17,7 @@ debug = 0
 debug-assertions = true
 
 [dependencies]
-shieldd-disclosure = { path = "../../../vendor/shieldd/crates/disclosure", package = "shieldd-sdk-disclosure", default-features = false }
+shieldd-disclosure = { path = "../../../vendor/shieldd/crates/disclosure", package = "shieldd-sdk-disclosure", default-features = false, features = ["orbis"] }
 serde_json = "1.0.128"
 decaf377-rdsa = "0.11"
 shieldd-asset = { path = "../../../vendor/shieldd/crates/core/asset", package = "shieldd-sdk-asset" }
