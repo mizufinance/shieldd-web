@@ -1,4 +1,3 @@
-import { pocOrbisAuditBundles, type LocatedOrbisAuditBundle } from './compliance.js';
 import { TransactionPlan } from '@mizufinance/protobuf/shieldd/core/transaction/v1/transaction_pb';
 import { TransactionPlannerRequest } from '@mizufinance/protobuf/shieldd/view/v1/view_pb';
 import { plan_transaction } from '../wasm/index.js';
@@ -22,11 +21,5 @@ export const planTransaction = async (
     gasFeeToken.toBinary(),
     grpcUrl,
   );
-  const decoded = TransactionPlan.fromBinary(plan);
-  const sidecars = await pocOrbisAuditBundles(plan);
-  Object.defineProperty(decoded, 'pocOrbisAuditBundles', {
-    value: sidecars,
-    enumerable: false,
-  });
-  return decoded as TransactionPlan & { pocOrbisAuditBundles: LocatedOrbisAuditBundle[] };
+  return TransactionPlan.fromBinary(plan);
 };

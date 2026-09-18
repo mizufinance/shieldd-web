@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { beforeAll } from 'vitest';
+import { ensureWasmInitialized } from './src/init.js';
 
 const originalFetch = globalThis.fetch.bind(globalThis);
 
@@ -21,3 +23,6 @@ globalThis.fetch = async (input, init) => {
 
   return originalFetch(input, init);
 };
+
+// Compile the development WASM as a fixture, outside each API assertion’s timeout.
+beforeAll(ensureWasmInitialized);

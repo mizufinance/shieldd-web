@@ -21,6 +21,7 @@
     "src/tree.ts",
     "src/view-server.ts",
     "src/compliance.ts",
+    "src/disclosure.ts",
     "src/orbis.ts"
   ],
   "exclude": ["**/*.test.ts", "src/test/**"]

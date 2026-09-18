@@ -199,6 +199,16 @@ mod tests {
     use shieldd_compliance::{AssetPolicy, ComplianceLeaf, IndexedLeaf, MerklePath};
     use shieldd_shielded_pool::{AssetWitness, TransferProofContext, UserWitness};
 
+    fn audit_keys() -> shieldd_compliance::AuditKeys {
+        shieldd_compliance::AuditKeys {
+            epoch: 1,
+            amount: decaf377::Element::GENERATOR * decaf377::Fr::from(201u64),
+            sender: decaf377::Element::GENERATOR * decaf377::Fr::from(202u64),
+            receiver: decaf377::Element::GENERATOR * decaf377::Fr::from(203u64),
+            checking: decaf377::Element::GENERATOR * decaf377::Fr::from(204u64),
+        }
+    }
+
     fn witness() -> (FullViewingKey, ActionWitness) {
         let fvk = shieldd_keys::test_keys::FULL_VIEWING_KEY.clone();
         let address = fvk.payment_address(0u32.into());
@@ -225,6 +235,7 @@ mod tests {
             "policy".into(),
             "read".into(),
             "document".into(),
+            audit_keys(),
         );
         let indexed = IndexedLeaf::from_policy(asset_id.0, 0, Fq::from(0u64), &policy);
         (

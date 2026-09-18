@@ -17,6 +17,8 @@ repo, in which case they use turbo or the monorepo configuration.
 
 ## Subject documents
 
+- [Disclosure SDK](disclosure-integration.md)
+
 - [Guiding principles](guiding-principles.md)
   - [All code should be typesafe](guiding-principles.md#all-code-should-be-typesafe)
   - [CI/CD enforces best practices](guiding-principles.md#cicd-enforces-best-practices)
