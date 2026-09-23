@@ -89,9 +89,10 @@ pub fn disclosure_inspect(package: &str) -> WasmResult<String> {
 #[wasm_bindgen]
 pub fn disclosure_verify(package: &str) -> WasmResult<String> {
     let result = (|| -> Result<String> {
-        Ok(serde_json::to_string(&sdk::verify(&sdk::decode_package(
-            package.as_bytes(),
-        )?)?)?)
+        Ok(serde_json::to_string(&sdk::verify(
+            &sdk::decode_package(package.as_bytes())?,
+            None,
+        )?)?)
     })();
     Ok(result?)
 }
@@ -132,7 +133,7 @@ pub fn disclosure_confirm_acceptance(
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let mut result = sdk::verify(&package)?;
+        let mut result = sdk::verify(&package, None)?;
         result.acceptance = sdk::confirm_acceptance(&package.statement, chain_id, &blocks)?;
         Ok(serde_json::to_string(&result)?)
     })();

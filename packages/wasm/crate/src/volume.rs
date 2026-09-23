@@ -1,6 +1,7 @@
 use anyhow::{ensure, Result};
-use decaf377::Fq;
+use ff::Field;
 use serde::{Deserialize, Serialize};
+use shieldd_crypto::Fq;
 use shieldd_keys::FullViewingKey;
 use shieldd_sct::Nullifier;
 use shieldd_shielded_pool::{
@@ -27,7 +28,7 @@ mod field_bytes {
     }
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Fq, D::Error> {
         let bytes = <[u8; 32]>::deserialize(deserializer)?;
-        Fq::from_bytes_checked(&bytes).map_err(serde::de::Error::custom)
+        shieldd_crypto::encoding::field(&bytes).map_err(serde::de::Error::custom)
     }
 }
 
@@ -145,7 +146,7 @@ impl VolumeJournal {
                 .iter()
                 .any(|entry| entry.day == day_start && entry.nullifier == nullifier)
         };
-        let blinding = Fq::rand(&mut rand_core::OsRng);
+        let blinding = Fq::random(&mut rand_core::OsRng);
         if let Some(tip) = self
             .tips
             .iter()
@@ -202,10 +203,8 @@ mod tests {
     fn audit_keys() -> shieldd_compliance::AuditKeys {
         shieldd_compliance::AuditKeys {
             epoch: 1,
-            amount: decaf377::Element::GENERATOR * decaf377::Fr::from(201u64),
-            sender: decaf377::Element::GENERATOR * decaf377::Fr::from(202u64),
-            receiver: decaf377::Element::GENERATOR * decaf377::Fr::from(203u64),
-            checking: decaf377::Element::GENERATOR * decaf377::Fr::from(204u64),
+            payload: *shieldd_crypto::generators::SPEND_AUTH * shieldd_crypto::Fr::from(201u64),
+            checking: *shieldd_crypto::generators::SPEND_AUTH * shieldd_crypto::Fr::from(204u64),
         }
     }
 
@@ -213,7 +212,7 @@ mod tests {
         let fvk = shieldd_keys::test_keys::FULL_VIEWING_KEY.clone();
         let address = fvk.payment_address(0u32.into());
         let asset_id = shieldd_asset::asset::Id(Fq::from(77u64));
-        let ring_pk = decaf377::Element::GENERATOR;
+        let ring_pk = *shieldd_crypto::generators::SPEND_AUTH;
         let rnk_dh_pk = *address.diversified_generator();
         let rnk = shieldd_compliance::derive_regulated_nullifier_key(
             fvk.incoming(),
@@ -223,8 +222,7 @@ mod tests {
             rnk_dh_pk,
         )
         .unwrap();
-        let leaf = ComplianceLeaf::registered_from_rnk(address, asset_id, ring_pk, rnk_dh_pk, rnk)
-            .unwrap();
+        let leaf = ComplianceLeaf::registered_from_rnk(address, asset_id, rnk_dh_pk, rnk).unwrap();
         let policy = AssetPolicy::new(
             ring_pk,
             100,
@@ -272,12 +270,14 @@ mod tests {
         journal.begin_block(0, false).unwrap();
         let origin = journal.plan(&witness, &fvk, timestamp, 20, true).unwrap();
         assert!(origin.starts_new_day());
-        let payload = origin.selected_payload(
-            fvk.nullifier_key(),
-            fvk.outgoing(),
-            Fq::from(1u64),
-            TransferProofContext::Ordinary,
-        );
+        let payload = origin
+            .selected_payload(
+                fvk.nullifier_key(),
+                fvk.outgoing(),
+                Fq::from(1u64),
+                TransferProofContext::Ordinary,
+            )
+            .unwrap();
         journal.observe(&payload);
         assert!(!journal
             .plan(&witness, &fvk, timestamp, 30, true)
@@ -305,12 +305,16 @@ mod tests {
             .plan(&witness, &fvk, timestamp, 1, false)
             .unwrap()
             .is_real());
-        journal.observe(&continuation.selected_payload(
-            fvk.nullifier_key(),
-            fvk.outgoing(),
-            Fq::from(2u64),
-            TransferProofContext::Ordinary,
-        ));
+        journal.observe(
+            &continuation
+                .selected_payload(
+                    fvk.nullifier_key(),
+                    fvk.outgoing(),
+                    Fq::from(2u64),
+                    TransferProofContext::Ordinary,
+                )
+                .unwrap(),
+        );
         assert!(!journal
             .plan(&witness, &fvk, timestamp, 1, true)
             .unwrap()

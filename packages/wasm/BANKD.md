@@ -1,13 +1,41 @@
 # Bankd browser SDK
 
-The tracked source includes the admin registration helpers, Orbis audit sidecars,
-and transfer seed-binding bridge as well as the mobile browser API.
-`vendor/shieldd` pins the Rust protocol implementation. The Bankd WASM workflow
-compiles this checkout and records both source revisions with its output.
-Build the TypeScript package with `pnpm --filter @mizufinance/wasm build`, then
-pack with `pnpm --dir packages/wasm pack --pack-destination /tmp`.
+`vendor/shieldd` pins the Pari/Jubjub protocol from Shieldd #155. Addresses and
+keys use the new suite-tagged encoding; old wallet databases and chains require
+a fresh start. The Bankd WASM workflow records both source revisions.
 
-The admin API fixture was captured from Bankd's shipped `.8` bundle. CI checks
-that its exports remain present and compares address derivation, compliance
-scalar, and registration leaf bytes. The seed-binding bridge uses the existing
-cross-language test vector. These checks do not validate proof generation.
+Build TypeScript with `pnpm --filter @mizufinance/wasm... build`. Generate protobuf
+bindings first with `pnpm --filter @mizufinance/protobuf proto`.
+
+## Native browser prover
+
+From `packages/wasm/crate`, build with Rust 1.95:
+
+```sh
+CARGO_BUILD_JOBS=2 RAYON_NUM_THREADS=2 cargo build --locked --bin pari-prover
+SHIELDD_PARI_KEYS=/absolute/shared/registry target/debug/pari-prover --circuit transfer
+```
+
+The worker supports `transfer` and `shielded_withdrawal`. It receives private
+witness protobufs in a bounded bincode frame and returns a statement hash plus
+the native Pari envelope. Bankd's loopback HTTP adapter preserves its existing
+JSON API. Use only on trusted local infrastructure: proving reveals witnesses
+to the worker. Node verification remains authoritative.
+
+Generate the registry once with Shieldd's `pari_setup` example and distribute
+the exact directory to every node and worker. Missing or mismatched keys fail;
+there is no simulated proving path.
+
+```sh
+SHIELDD_PARI_KEYS=/absolute/shared/registry CARGO_BUILD_JOBS=2 RAYON_NUM_THREADS=2 \
+  cargo test --locked --lib native_prover_round_trip -- --ignored
+```
+
+This opt-in test produces and verifies a real host-withdrawal Pari proof. The
+ordinary Rust tests check framing and action construction; admin API vectors
+and bech32 tests check encoding compatibility. `note_reader_fixture` generates
+real Rust-encrypted notes in unsigned transaction wrappers for Bankd's Go
+reader tests; those fixtures do not claim chain acceptance.
+
+Orbis integration requires a separate upstream migration. Bankd's audit demo
+can simulate its results on the backend; this SDK never simulates proof tests.
