@@ -10,7 +10,6 @@ const CASE_TO_LABEL: Partial<Record<Case, string>> = {
   noteReshape: 'Note Maintenance',
   complianceRegisterAsset: 'Compliance: Register Asset',
   complianceRegisterUser: 'Compliance: Register User',
-  aggregateBundle: 'Aggregate Bundle',
 };
 
 const getLabelForActionCase = (actionCase: ActionView['actionView']['case']): string => {

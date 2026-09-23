@@ -382,7 +382,7 @@ async fn select_notes<Db: Database>(
         .map(|record| record.note.amount())
         .sum::<Amount>();
     notes.retain(|record| u64::from(record.position) >= recent_position_floor);
-    notes.sort_by(|a, b| b.note.amount().cmp(&a.note.amount()));
+    notes.sort_by_key(|note| std::cmp::Reverse(note.note.amount()));
 
     let mut total = Amount::zero();
     let mut selected = Vec::new();

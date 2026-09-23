@@ -15,7 +15,6 @@ const SIGNATURE_CASES: ActionClassification[] = [
   'shieldedHostWithdrawal',
   'complianceRegisterAsset',
   'complianceRegisterUser',
-  'aggregateBundle',
 ];
 
 export const TRANSACTION_LABEL_BY_CLASSIFICATION: Record<TransactionClassification, string> = {
@@ -29,7 +28,6 @@ export const TRANSACTION_LABEL_BY_CLASSIFICATION: Record<TransactionClassificati
   shieldedHostWithdrawal: 'Host Withdrawal',
   complianceRegisterAsset: 'Compliance: Register Asset',
   complianceRegisterUser: 'Compliance: Register User',
-  aggregateBundle: 'Aggregate Bundle',
 };
 
 export const getTransactionClassificationLabel = (txv?: TransactionView): string =>

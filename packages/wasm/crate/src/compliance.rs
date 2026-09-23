@@ -165,7 +165,7 @@ async fn parse_batch_response(
     let mut asset_policies = BTreeMap::new();
     let mut user_proofs = BTreeMap::new();
 
-    for (result, (address, asset_id)) in response.results.into_iter().zip(queries.into_iter()) {
+    for (result, (address, asset_id)) in response.results.into_iter().zip(queries) {
         let compliance_path = parse_merkle_path(result.compliance_path);
         let asset_path = parse_merkle_path(result.asset_path);
 
