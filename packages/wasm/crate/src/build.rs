@@ -2,19 +2,12 @@ use crate::error::WasmResult;
 use crate::utils;
 use crate::view_server::{load_tree, StoredTree};
 use anyhow::{anyhow, Context};
-use decaf377::Fq;
 use rand_core::OsRng;
 use serde::Serialize;
+use shieldd_crypto::Fq;
 use shieldd_keys::{keys::SpendKey, symmetric::PayloadKey, FullViewingKey};
 use shieldd_proto::DomainType;
-use shieldd_shielded_pool::{
-    gnark::{
-        decode_shielded_withdrawal_witness, decode_transfer_witness,
-        encode_shielded_withdrawal_witness, translate_shielded_withdrawal_proof_result,
-        translate_transfer_proof_result,
-    },
-    ShieldedWithdrawalFamilyId,
-};
+use shieldd_shielded_pool::{ShieldedWithdrawalProof, TransferProof};
 use shieldd_tct::{self as tct, Proof, StateCommitment};
 use shieldd_transaction::{
     plan::{ActionPlan, TransactionPlan},
@@ -133,50 +126,91 @@ fn build_action_proof_request_inner(
     full_viewing_key: FullViewingKey,
     witness: WitnessData,
 ) -> WasmResult<ProofRequest> {
-    let anchor = witness.anchor;
-    let recent_position_floor = transaction_plan.recent_position_floor()?;
-    let request = match action_plan {
-        ActionPlan::Transfer(plan) => {
-            let auth_paths =
-                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
-            ProofRequest {
-                family: "transfer",
-                witness: plan.transfer_witness_payload(
-                    &full_viewing_key,
-                    auth_paths,
-                    anchor,
-                    recent_position_floor,
-                )?,
-            }
-        }
-        ActionPlan::ShieldedHostWithdrawal(plan) => {
-            let auth_paths =
-                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
-            let (public, private) = plan.shielded_host_withdrawal_public_private(
-                &full_viewing_key,
-                &auth_paths,
-                anchor,
-                recent_position_floor,
-            )?;
-            ProofRequest {
-                // Host withdrawals deliberately reuse the canonical shielded
-                // withdrawal circuit and prover artifact.
-                family: "shielded_withdrawal",
-                witness: encode_shielded_withdrawal_witness(&public, &private)?,
-            }
-        }
+    let family = match &action_plan {
+        ActionPlan::Transfer(_) => "transfer",
+        ActionPlan::ShieldedHostWithdrawal(_) => "shielded_withdrawal",
         other => {
             return Err(anyhow!(
-                "browser proving is not available for action plan variant {}",
+                "browser proving unavailable for action {}",
                 other.variant_index()
             )
             .into())
         }
     };
-    Ok(request)
+    let request = ProverWitness {
+        transaction_plan: transaction_plan.encode_to_vec(),
+        action_plan: action_plan.encode_to_vec(),
+        full_viewing_key: full_viewing_key.encode_to_vec(),
+        witness_data: witness.encode_to_vec(),
+    };
+    Ok(ProofRequest {
+        family,
+        witness: bincode::serialize(&request).map_err(anyhow::Error::from)?,
+    })
 }
 
-/// Builds a binary Action from a binary ActionPlan and a packed gnark proof
+/// Private local-prover input. Never send this to an untrusted service.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ProverWitness {
+    transaction_plan: Vec<u8>,
+    action_plan: Vec<u8>,
+    full_viewing_key: Vec<u8>,
+    witness_data: Vec<u8>,
+}
+
+/// Generate a native Pari proof using the same registry as the node.
+pub fn prove_request(
+    bytes: &[u8],
+    family: &str,
+    registry: &shieldd_proof_params::pari::Registry,
+) -> anyhow::Result<Vec<u8>> {
+    use bincode::Options;
+    let request: ProverWitness = bincode::DefaultOptions::new()
+        .with_fixint_encoding()
+        .with_limit(4 * 1024 * 1024)
+        .reject_trailing_bytes()
+        .deserialize(bytes)?;
+    let plan = TransactionPlan::decode(request.transaction_plan.as_slice())?;
+    let action = ActionPlan::decode(request.action_plan.as_slice())?;
+    let fvk = FullViewingKey::decode(request.full_viewing_key.as_slice())?;
+    let witness = WitnessData::decode(request.witness_data.as_slice())?;
+    let floor = plan.recent_position_floor()?;
+    let (statement, proof) = match action {
+        ActionPlan::Transfer(plan) if family == "transfer" => {
+            let paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
+            let (public, private) =
+                plan.transfer_public_private(&fvk, &paths, witness.anchor, floor)?;
+            (
+                public.statement_hash()?,
+                TransferProof::prove(public, private, registry)?.inner,
+            )
+        }
+        ActionPlan::ShieldedHostWithdrawal(plan) if family == "shielded_withdrawal" => {
+            let paths =
+                transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
+            let (public, private) =
+                plan.shielded_host_withdrawal_public_private(&fvk, &paths, witness.anchor, floor)?;
+            (
+                public.statement_hash()?,
+                ShieldedWithdrawalProof::prove(public, private, registry)?.inner,
+            )
+        }
+        _ => anyhow::bail!("unsupported or mismatched proof family"),
+    };
+    let mut result = statement.to_bytes().to_vec();
+    result.extend(proof);
+    Ok(result)
+}
+
+fn decode_proof_result(bytes: &[u8], expected: Fq) -> anyhow::Result<Vec<u8>> {
+    anyhow::ensure!(bytes.len() == 32 + 244, "invalid Pari proof result length");
+    let claimed = shieldd_crypto::encoding::field(bytes[..32].try_into()?)?;
+    anyhow::ensure!(claimed == expected, "proof result statement hash mismatch");
+    Ok(bytes[32..].to_vec())
+}
+
+/// Builds a binary Action from a binary ActionPlan and a native Pari proof
 /// result returned by the local HTTP prover.
 #[wasm_bindgen]
 pub fn build_action_with_proof_result(
@@ -218,22 +252,16 @@ fn build_action_with_proof_result_inner(
         ActionPlan::Transfer(plan) => {
             let auth_paths =
                 transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
-            let expected_witness = plan.transfer_witness_payload(
+            let (public, _) = plan.transfer_public_private(
                 &full_viewing_key,
-                auth_paths,
+                &auth_paths,
                 anchor,
                 recent_position_floor,
             )?;
-            let expected = Fq::from_le_bytes_mod_order(
-                &decode_transfer_witness(&expected_witness)?.claimed_statement_hash,
-            );
-            let (claimed, proof) = translate_transfer_proof_result(proof_result)?;
-            if claimed != expected {
-                return Err(anyhow!(
-                    "transfer proof result statement hash mismatch: expected {expected}, got {claimed}"
-                )
-                .into());
-            }
+            let proof = TransferProof {
+                inner: decode_proof_result(proof_result, public.statement_hash()?)?,
+            };
+            proof.validate_encoding()?;
             Action::Transfer(plan.build_unauth_transfer_with_proof(
                 &full_viewing_key,
                 vec![[0u8; 64].into(); plan.spends.len()],
@@ -252,20 +280,11 @@ fn build_action_with_proof_result_inner(
                 anchor,
                 recent_position_floor,
             )?;
-            let expected_witness = encode_shielded_withdrawal_witness(&public, &private)?;
-            let expected = Fq::from_le_bytes_mod_order(
-                &decode_shielded_withdrawal_witness(&expected_witness)?.claimed_statement_hash,
-            );
-            let (claimed, proof) = translate_shielded_withdrawal_proof_result(
-                proof_result,
-                ShieldedWithdrawalFamilyId::Canonical,
-            )?;
-            if claimed != expected {
-                return Err(anyhow!(
-                    "shielded host withdrawal proof result statement hash mismatch: expected {expected}, got {claimed}"
-                )
-                .into());
-            }
+            let _ = private;
+            let proof = ShieldedWithdrawalProof {
+                inner: decode_proof_result(proof_result, public.statement_hash()?)?,
+            };
+            proof.validate_encoding()?;
             Action::ShieldedHostWithdrawal(plan.build_unauth_shielded_host_withdrawal_with_proof(
                 &full_viewing_key,
                 vec![[0u8; 64].into(); plan.spends.len()],
@@ -445,8 +464,12 @@ mod tests {
 
     use super::build_action_proof_request_inner;
 
-    #[test]
-    fn host_withdrawal_reuses_shielded_withdrawal_prover_family() {
+    fn host_withdrawal_fixture() -> (
+        TransactionPlan,
+        ActionPlan,
+        shieldd_keys::FullViewingKey,
+        WitnessData,
+    ) {
         let spend_key = SpendKey::try_from(SpendKeyBytes::from([7u8; 32])).unwrap();
         let fvk = spend_key.full_viewing_key().clone();
         let address = fvk.payment_address(AddressIndex::new(0));
@@ -488,7 +511,7 @@ mod tests {
                     recipient: "bankd1recipient".to_owned(),
                 }),
             },
-            decaf377::Fr::from(9u64),
+            shieldd_crypto::Fr::from(9u64),
             {
                 let assets = shieldd_compliance::IndexedMerkleTree::new();
                 let (position, leaf, path) = assets.non_membership_proof(asset_id.0).unwrap();
@@ -502,7 +525,7 @@ mod tests {
                             path: path.into(),
                             is_regulated: false,
                         },
-                        user_root: shieldd_tct::StateCommitment(decaf377::Fq::from(0u64)),
+                        user_root: shieldd_tct::StateCommitment(shieldd_crypto::Fq::from(0u64)),
                         sender: shieldd_shielded_pool::UserWitness {
                             leaf: shieldd_compliance::ComplianceLeaf::synthetic_unregulated(
                                 address, asset_id,
@@ -513,7 +536,7 @@ mod tests {
                         policy: None,
                     },
                     timestamp: 86_400,
-                    nonce: decaf377::Fr::from(7u64),
+                    nonce: shieldd_crypto::Fr::from(7u64),
                 }
             },
             shieldd_shielded_pool::VolumeAccumulatorPlan::padding(86_400),
@@ -540,10 +563,51 @@ mod tests {
             historical_nullifier_proofs: Vec::new(),
         };
 
-        let request =
-            build_action_proof_request_inner(transaction_plan, action_plan, fvk, witness).unwrap();
+        (transaction_plan, action_plan, fvk, witness)
+    }
 
+    #[test]
+    fn host_withdrawal_reuses_shielded_withdrawal_prover_family() {
+        let (plan, action, fvk, witness) = host_withdrawal_fixture();
+        let request = build_action_proof_request_inner(plan, action, fvk, witness).unwrap();
         assert_eq!(request.family, "shielded_withdrawal");
         assert!(!request.witness.is_empty());
+    }
+
+    #[test]
+    fn proof_response_rejects_malformed_length_and_wrong_statement() {
+        use shieldd_crypto::Fq;
+        assert!(super::decode_proof_result(&[0; 275], Fq::from(1)).is_err());
+        let mut result = vec![0; 276];
+        result[..32].copy_from_slice(&Fq::from(2).to_bytes());
+        assert!(super::decode_proof_result(&result, Fq::from(1)).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires SHIELDD_PARI_KEYS and generates a real Pari proof"]
+    fn native_prover_round_trip() {
+        let registry =
+            shieldd_proof_params::pari::Registry::load(std::env::var("SHIELDD_PARI_KEYS").unwrap())
+                .unwrap();
+        let (plan, action, fvk, witness) = host_withdrawal_fixture();
+        let request = build_action_proof_request_inner(
+            plan.clone(),
+            action.clone(),
+            fvk.clone(),
+            witness.clone(),
+        )
+        .unwrap();
+        assert!(super::prove_request(&request.witness, "transfer", &registry).is_err());
+        let result = super::prove_request(&request.witness, request.family, &registry).unwrap();
+        let built =
+            super::build_action_with_proof_result_inner(plan, action, fvk, witness, &result)
+                .unwrap();
+        assert!(matches!(
+            built,
+            shieldd_transaction::Action::ShieldedHostWithdrawal(_)
+        ));
+        let mut trailing = request.witness;
+        trailing.push(0);
+        assert!(super::prove_request(&trailing, request.family, &registry).is_err());
     }
 }

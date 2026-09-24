@@ -2,7 +2,7 @@ name: Bankd WASM
 on:
   workflow_dispatch:
   push:
-    branches: [codex/disclosure-integration]
+    branches: [main, codex/pari-sdk-integration]
 jobs:
   wasm:
     runs-on: ubuntu-24.04
@@ -20,7 +20,7 @@ jobs:
       - name: Generate protocol bindings
         run: |
           pnpm --filter @mizufinance/protobuf run proto
-      - uses: dtolnay/rust-toolchain@1.89.0
+      - uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
@@ -35,6 +35,9 @@ jobs:
       - name: Test Rust wrappers
         working-directory: packages/wasm/crate
         run: CARGO_BUILD_JOBS=2 RAYON_NUM_THREADS=2 cargo test --locked --lib -- --test-threads=2
+      - name: Build native browser prover
+        working-directory: packages/wasm/crate
+        run: CARGO_BUILD_JOBS=2 RAYON_NUM_THREADS=2 cargo build --locked --bin pari-prover
       - name: Check dependency lock
         run: git diff --exit-code -- packages/wasm/crate/Cargo.lock
       - name: Build TypeScript SDK
@@ -56,3 +59,4 @@ jobs:
             packages/wasm/crate/Cargo.lock
             packages/wasm/dist/
             packages/protobuf/dist/
+            packages/bech32m/dist/

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'; // Instanitating ViewServer requires opening up IndexedDb connection
 import { describe, expect, it } from 'vitest';
-import { Buffer } from 'node:buffer';
+import { generateSpendKey, getFullViewingKey } from './keys.js';
 import { ViewServer } from '../wasm/index.js';
 import { IdbConstants } from '@mizufinance/types/indexed-db';
 
@@ -25,13 +25,10 @@ const TEST_TABLES = {
 
 describe('wasmViewServer', () => {
   it('opens the view with typed storage constants', async () => {
-    // Public fixture from keys.test.ts; key derivation has its own tests.
-    const fullViewingKey = Uint8Array.from(
-      Buffer.from(
-        '0a40a8a1a19918efba962476e4f3f79d1477de74143941c1613cfb2e50e37cb6af03330170cc6f168bb5269fdfd12843915d2aa21f02fc942af4b707feaf15194e12',
-        'hex',
-      ),
+    const spendKey = await generateSpendKey(
+      'benefit cherry cannon tooth exhibit law avocado spare tooth that amount pumpkin scene foil tape mobile shine apology add crouch situate sun business explain',
     );
+    const fullViewingKey = (await getFullViewingKey(spendKey)).toBinary();
     const idbConstants = {
       name: 'dbName',
       version: 123,

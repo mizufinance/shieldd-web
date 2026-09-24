@@ -1,7 +1,6 @@
 #![allow(clippy::mutable_key_type, clippy::map_entry)]
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
-use decaf377::Fq;
 use shieldd_asset::asset;
 use shieldd_compliance::{
     AssetPolicy, AssetProofData, BatchComplianceData, ComplianceLeaf, IndexedLeaf, MerklePath,
@@ -166,7 +165,7 @@ async fn parse_batch_response(
     let mut asset_policies = BTreeMap::new();
     let mut user_proofs = BTreeMap::new();
 
-    for (result, (address, asset_id)) in response.results.into_iter().zip(queries.into_iter()) {
+    for (result, (address, asset_id)) in response.results.into_iter().zip(queries) {
         let compliance_path = parse_merkle_path(result.compliance_path);
         let asset_path = parse_merkle_path(result.asset_path);
 
@@ -345,7 +344,7 @@ fn parse_state_commitment(bytes: &[u8], field: &str) -> Result<StateCommitment> 
     let mut bytes_array = [0u8; 32];
     bytes_array.copy_from_slice(bytes);
     Ok(StateCommitment(
-        Fq::from_bytes_checked(&bytes_array)
+        shieldd_crypto::encoding::field(&bytes_array)
             .map_err(|e| anyhow!("invalid {} field element: {}", field, e))?,
     ))
 }

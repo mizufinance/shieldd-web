@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Context};
-use decaf377::Fr;
+use ff::Field;
 use rand_core::OsRng;
 use shieldd_asset::Value;
+use shieldd_crypto::Fr;
 use shieldd_keys::keys::AddressIndex;
 use shieldd_keys::{Address, FullViewingKey};
 use shieldd_num::Amount;
@@ -279,12 +280,12 @@ async fn plan_transfer<Db: Database>(
     Ok(TransferPlan::new(
         spends,
         shielded_outputs,
-        Fr::rand(&mut OsRng),
+        Fr::random(&mut OsRng),
         shieldd_shielded_pool::TransferContext {
             witness,
             recipient,
             timestamp: context.timestamp,
-            nonce: Fr::rand(&mut OsRng),
+            nonce: Fr::random(&mut OsRng),
         },
         volume,
         shieldd_shielded_pool::TransferProofContext::Ordinary,
@@ -350,11 +351,11 @@ async fn plan_host_withdrawal<Db: Database>(
         spends,
         change_output,
         withdrawal,
-        Fr::rand(&mut OsRng),
+        Fr::random(&mut OsRng),
         shieldd_shielded_pool::WithdrawalContext {
             witness,
             timestamp: context.timestamp,
-            nonce: Fr::rand(&mut OsRng),
+            nonce: Fr::random(&mut OsRng),
         },
         volume,
         context.routing.clone(),
@@ -381,7 +382,7 @@ async fn select_notes<Db: Database>(
         .map(|record| record.note.amount())
         .sum::<Amount>();
     notes.retain(|record| u64::from(record.position) >= recent_position_floor);
-    notes.sort_by(|a, b| b.note.amount().cmp(&a.note.amount()));
+    notes.sort_by_key(|note| std::cmp::Reverse(note.note.amount()));
 
     let mut total = Amount::zero();
     let mut selected = Vec::new();

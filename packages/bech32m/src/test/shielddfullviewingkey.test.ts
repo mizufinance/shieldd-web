@@ -6,12 +6,13 @@ import { Inner } from '../format/inner.js';
 
 describe('fvk conversion', () => {
   const okInner = new Uint8Array([
-    96, 146, 69, 187, 236, 3, 245, 228, 42, 194, 121, 104, 201, 250, 8, 194, 87, 95, 93, 29, 171,
-    250, 177, 162, 130, 226, 176, 56, 91, 122, 89, 9, 34, 67, 106, 56, 17, 73, 174, 234, 72, 54,
-    212, 210, 111, 5, 34, 249, 15, 60, 220, 191, 1, 224, 210, 114, 210, 205, 9, 187, 72, 115, 75, 2,
+    1, 233, 156, 121, 254, 123, 37, 201, 174, 0, 78, 171, 237, 172, 164, 208, 52, 66, 193, 61, 66,
+    171, 0, 123, 215, 179, 105, 102, 99, 92, 95, 250, 94, 60, 51, 44, 46, 51, 221, 67, 223, 15, 100,
+    226, 109, 248, 245, 227, 234, 160, 159, 93, 153, 146, 140, 226, 43, 9, 183, 238, 2, 24, 17, 153,
+    112,
   ]);
   const okBech32 =
-    'shielddfullviewingkey1vzfytwlvq067g2kz095vn7sgcft47hga40atrg5zu2crskm6tyyjysm28qg5nth2fqmdf5n0q530jreumjlsrcxjwtfv6zdmfpe5kqs0knh76';
+    'shielddfullviewingkey1q85ec7070vjuntsqf647mt9y6q6y9sfag24sq77hkd5kvc6utla9u0pn9shr8h2rmu8kfcndlr67864qnaweny5vug4sndlwqgvprxts0vvmuu';
 
   generateTests(
     Prefixes.shielddfullviewingkey,

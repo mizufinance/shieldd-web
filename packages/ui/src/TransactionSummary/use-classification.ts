@@ -33,7 +33,6 @@ const CLASSIFICATION_LABEL_MAP: Record<TransactionClassification, string> = {
   shieldedHostWithdrawal: 'Withdrawal',
   complianceRegisterAsset: 'Compliance: Register Asset',
   complianceRegisterUser: 'Compliance: Register User',
-  aggregateBundle: 'Aggregate Bundle',
 };
 
 export const useClassification = (info: TransactionInfo, getMetadataByAssetId?: GetMetadata) => {

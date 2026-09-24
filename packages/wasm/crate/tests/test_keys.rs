@@ -1,9 +1,7 @@
 extern crate core;
 
 use rand_core::OsRng;
-use shieldd_keys::keys::{
-    AddressIndex, Bip44Path, SeedPhrase, SpendKey, SpendKeyBytes, WalletId, SPENDKEY_LEN_BYTES,
-};
+use shieldd_keys::keys::{AddressIndex, Bip44Path, SeedPhrase, SpendKey, WalletId};
 use shieldd_keys::{Address, FullViewingKey};
 use shieldd_proto::{DomainType, Message};
 use shieldd_wasm::keys::{
@@ -16,13 +14,11 @@ const TEST_SEED_PHRASE: &str = "comfort ten front cycle churn burger oak absent 
 #[test]
 fn generates_spend_key() {
     let slice = generate_spend_key(TEST_SEED_PHRASE).unwrap();
-    let mut bytes = [0u8; SPENDKEY_LEN_BYTES];
-    bytes.copy_from_slice(&slice[0..32]);
-
-    let spend_key = SpendKey::try_from(SpendKeyBytes::from(bytes)).unwrap();
+    // The wrapper returns a protobuf SpendKey, not an untagged 32-byte seed.
+    let spend_key = SpendKey::decode(slice.as_slice()).unwrap();
     assert_eq!(
         spend_key.to_string(),
-        "shielddspendkey1pgsphqgnltgy7hdspe4v74qefx2slp0v50szuup9fqutw5959gkq7j55fx"
+        shieldd_keys::test_keys::SPEND_KEY.to_string()
     );
 }
 
@@ -31,7 +27,7 @@ fn generates_fvk() {
     let spend_key = generate_spend_key(TEST_SEED_PHRASE).unwrap();
     let fvk_bytes = get_full_viewing_key(spend_key.as_slice()).unwrap();
     let fvk = FullViewingKey::decode(fvk_bytes.as_slice()).unwrap();
-    assert_eq!(fvk.to_string(), "shielddfullviewingkey1m3409f50z92qajpkw93wp7d5yumdyfvqqz2pj5h8dp0v28z8svzqh7awek4q262g500pswwd5fmg6u4dv0n4rnag0mvcwjudr5p3grqnhg43u");
+    assert_eq!(fvk.to_string(), "shielddfullviewingkey1q85ec7070vjuntsqf647mt9y6q6y9sfag24sq77hkd5kvc6utla9u0pn9shr8h2rmu8kfcndlr67864qnaweny5vug4sndlwqgvprxts0vvmuu");
 }
 
 #[test]
@@ -42,7 +38,7 @@ fn generates_wallet_id() {
     let wallet_id = WalletId::decode(wallet_id_bytes.as_slice()).unwrap();
     assert_eq!(
         wallet_id.to_string(),
-        "shielddwalletid1hz3vq7alehqcxe4kd4xmmw3ue85me7ft90qa72zkc776cenyt58sw558re"
+        "shielddwalletid1vw2yglet00kxkexxra8ynp85cs2cepgxhyvhhczd4wmmy3elmnvswv8y0g"
     );
 }
 
@@ -54,7 +50,7 @@ fn gets_address_by_index() {
     let address = Address::decode(address_bytes.as_slice()).unwrap();
     assert_eq!(
         address.to_string(),
-        "shieldd1u29dhz4vxgnek6a3vzxlejg0l83wegpu7hgs3yphdvljcnnnh89dvs6lc9hxxw94w464t7lh5x36cxnxyx0"
+        "shieldd1qyn84grsmdwknvcwfppfqck9tpucuw9shrv0jy0y7cesz4ln6ucgwk0nlh0f8l09l2qgydjmttsztkggak2g7"
     );
 }
 
@@ -63,7 +59,7 @@ fn raises_if_fvk_invalid() {
     let invalid_fvk = vec![0, 1, 2, 3];
     let err = get_wallet_id(invalid_fvk.encode_to_vec().as_slice()).unwrap_err();
     assert_eq!(
-        "Wrong byte length, expected 64 but found 4",
+        "Wrong byte length, expected 65 but found 4",
         err.to_string()
     );
 }

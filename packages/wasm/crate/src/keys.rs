@@ -193,5 +193,5 @@ pub fn get_transmission_key_by_address(address: &[u8]) -> WasmResult<Vec<u8>> {
 
     let address: Address = Address::decode(address)?;
     let transmission_key = address.transmission_key();
-    Ok(transmission_key.0.to_vec())
+    Ok(transmission_key.to_bytes().to_vec())
 }

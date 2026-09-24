@@ -10,8 +10,10 @@ const randomString = (byteLength = 32) =>
 
 describe('assetIdFromBaseDenom', () => {
   test('should return the correct asset id for a known asset id', async () => {
+    // BLAKE2b-512(personal='Shieldd_AssetID', 'ushieldd'), reduced into
+    // the BLS12-381 scalar field and encoded little-endian as passet.
     const ushielddFromBech32m = new AssetId(
-      assetIdFromBech32m('passet16z48kfv36flfq5nznlnqakts6t0r0e0qaw92y3ehcavyjs2tx5pqy04fm7'),
+      assetIdFromBech32m('passet1yqxkeed0gc2cfljnsqzmtcsxmdu49gfuj2dmsee67uwwedghsu7qkfpkzj'),
     );
 
     const ushielddFromBaseDenom = await assetIdFromBaseDenom('ushieldd');
