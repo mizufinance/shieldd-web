@@ -48,16 +48,6 @@ pub fn witness(transaction_plan: &[u8], stored_tree: JsValue) -> WasmResult<Vec<
 
 fn witness_inner(plan: TransactionPlan, stored_tree: StoredTree) -> WasmResult<WitnessData> {
     let sct = load_tree(stored_tree);
-    let recent_position_floor = plan.recent_position_floor()?;
-    if planned_spends(&plan).into_iter().any(|plan| {
-        plan.note.amount() != 0u64.into() && u64::from(plan.position) < recent_position_floor
-    }) {
-        return Err(anyhow!(
-            "historical nullifier proofs are required for one or more selected notes"
-        )
-        .into());
-    }
-
     let mut note_commitments: Vec<StateCommitment> = planned_spends(&plan)
         .into_iter()
         .filter(|plan| plan.note.amount() != 0u64.into())
@@ -85,7 +75,6 @@ fn witness_inner(plan: TransactionPlan, stored_tree: StoredTree) -> WasmResult<W
             .into_iter()
             .map(|proof| (proof.commitment(), proof))
             .collect(),
-        historical_nullifier_proofs: Vec::new(),
     };
 
     for nc in planned_spends(&plan)
@@ -170,17 +159,15 @@ pub fn prove_request(
         .with_limit(4 * 1024 * 1024)
         .reject_trailing_bytes()
         .deserialize(bytes)?;
-    let plan = TransactionPlan::decode(request.transaction_plan.as_slice())?;
+    let _plan = TransactionPlan::decode(request.transaction_plan.as_slice())?;
     let action = ActionPlan::decode(request.action_plan.as_slice())?;
     let fvk = FullViewingKey::decode(request.full_viewing_key.as_slice())?;
     let witness = WitnessData::decode(request.witness_data.as_slice())?;
-    let floor = plan.recent_position_floor()?;
     let (statement, proof) = match action {
         ActionPlan::Transfer(plan) if family == "transfer" => {
             let paths =
                 transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
-            let (public, private) =
-                plan.transfer_public_private(&fvk, &paths, witness.anchor, floor)?;
+            let (public, private) = plan.transfer_public_private(&fvk, &paths, witness.anchor)?;
             (
                 public.statement_hash()?,
                 TransferProof::prove(public, private, registry)?.inner,
@@ -190,7 +177,7 @@ pub fn prove_request(
             let paths =
                 transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
             let (public, private) =
-                plan.shielded_host_withdrawal_public_private(&fvk, &paths, witness.anchor, floor)?;
+                plan.shielded_host_withdrawal_public_private(&fvk, &paths, witness.anchor)?;
             (
                 public.statement_hash()?,
                 ShieldedWithdrawalProof::prove(public, private, registry)?.inner,
@@ -246,29 +233,23 @@ fn build_action_with_proof_result_inner(
 ) -> WasmResult<Action> {
     let anchor = witness.anchor;
     let memo_key = memo_key(&transaction_plan);
-    let recent_position_floor = transaction_plan.recent_position_floor()?;
 
     let action = match action_plan {
         ActionPlan::Transfer(plan) => {
             let auth_paths =
                 transfer_auth_paths(&plan.spends, plan.accumulator_prior_commitment(), &witness)?;
-            let (public, _) = plan.transfer_public_private(
-                &full_viewing_key,
-                &auth_paths,
-                anchor,
-                recent_position_floor,
-            )?;
+            let (public, _) =
+                plan.transfer_public_private(&full_viewing_key, &auth_paths, anchor)?;
             let proof = TransferProof {
                 inner: decode_proof_result(proof_result, public.statement_hash()?)?,
             };
             proof.validate_encoding()?;
             Action::Transfer(plan.build_unauth_transfer_with_proof(
                 &full_viewing_key,
-                vec![[0u8; 64].into(); plan.spends.len()],
+                [0u8; 64].into(),
                 anchor,
                 &memo_key,
                 proof,
-                recent_position_floor,
             )?)
         }
         ActionPlan::ShieldedHostWithdrawal(plan) => {
@@ -278,7 +259,6 @@ fn build_action_with_proof_result_inner(
                 &full_viewing_key,
                 &auth_paths,
                 anchor,
-                recent_position_floor,
             )?;
             let _ = private;
             let proof = ShieldedWithdrawalProof {
@@ -287,11 +267,10 @@ fn build_action_with_proof_result_inner(
             proof.validate_encoding()?;
             Action::ShieldedHostWithdrawal(plan.build_unauth_shielded_host_withdrawal_with_proof(
                 &full_viewing_key,
-                vec![[0u8; 64].into(); plan.spends.len()],
+                [0u8; 64].into(),
                 anchor,
                 &memo_key,
                 proof,
-                recent_position_floor,
             )?)
         }
         other => {
@@ -452,9 +431,6 @@ mod tests {
     use rand_core::OsRng;
     use shieldd_asset::{Value, BASE_ASSET_ID};
     use shieldd_keys::keys::{AddressIndex, SpendKey, SpendKeyBytes};
-    use shieldd_sct::nullifier_generation::{
-        empty_history_head, NullifierWindow, PROTOCOL_VERSION,
-    };
     use shieldd_shielded_pool::{
         HostTransfer, HostWithdrawal, HostWithdrawalDestination, Note, Rseed,
         ShieldedHostWithdrawalPlan, ShieldedInputPlan, ShieldedOutputPlan,
@@ -549,18 +525,10 @@ mod tests {
             transaction_parameters: TransactionParameters::default(),
             fee_funding: None,
             memo: None,
-            nullifier_window: Some(NullifierWindow {
-                protocol_version: PROTOCOL_VERSION,
-                current_generation: 1,
-                recent_position_floor: 0,
-                archived_generation_count: 0,
-                archived_history_head: empty_history_head(),
-            }),
         };
         let witness = WitnessData {
             anchor,
             state_commitment_proofs: BTreeMap::from([(proof.commitment(), proof)]),
-            historical_nullifier_proofs: Vec::new(),
         };
 
         (transaction_plan, action_plan, fvk, witness)

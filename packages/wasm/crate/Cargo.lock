@@ -2339,6 +2339,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 
 [[package]]
+name = "nomt-core"
+version = "1.0.5"
+source = "git+https://github.com/thrumdev/nomt?rev=c3c0e55794500262dfde7c83b6f7455d2aeb303e#c3c0e55794500262dfde7c83b6f7455d2aeb303e"
+dependencies = [
+ "arrayvec",
+ "bitvec",
+ "digest 0.10.7",
+ "ruint",
+ "serde",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3061,6 +3074,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruint"
+version = "1.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2973657b5127d510e230f5c63d2d106af9c8f79393d8b9f4647323e8196bdde5"
+dependencies = [
+ "ruint-macro",
+]
+
+[[package]]
+name = "ruint-macro"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
+
+[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3620,6 +3648,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode",
+ "bitvec",
  "blake2b_simd",
  "bytes",
  "chrono",
@@ -3627,6 +3656,7 @@ dependencies = [
  "hex",
  "imbl",
  "metrics",
+ "nomt-core",
  "once_cell",
  "pbjson-types",
  "rand 0.8.8",
@@ -3732,6 +3762,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "shieldd-sdk-asset",
+ "shieldd-sdk-circuits",
  "shieldd-sdk-compliance",
  "shieldd-sdk-crypto",
  "shieldd-sdk-fee",
