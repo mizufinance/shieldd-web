@@ -60,3 +60,6 @@ wasm-bindgen-test = "0.3.43"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasm_bindgen_unstable_test_coverage)'] }
+
+[patch.crates-io]
+chunks-02 = { package = "imbl-sized-chunks", path = "../../../vendor/shieldd/third_party/imbl-sized-chunks-0.2.0" }
