@@ -1,6 +1,6 @@
-import { ArchiveRangeRequest, ArchiveRangeResponse, KeyValueResponse } from '@mizufinance/protobuf/shieldd/storage/v1/storage_pb';
+import { KeyValueResponse } from '@mizufinance/protobuf/shieldd/storage/v1/storage_pb';
 import { NullifierResponse } from '@mizufinance/protobuf/shieldd/core/component/sct/v1/sct_pb';
-import { verifyNativeValue, verifyNativeNullifier, verifyNativeArchiveRange } from '../wasm/index.js';
+import { verifyNativeValue, verifyNativeNullifier } from '../wasm/index.js';
 import { ensureWasmInitialized } from './init.js';
 
 /** sdkAnchor must come from the wallet's authenticated SDK state. */
@@ -25,23 +25,3 @@ export const verifyNullifier = async (
 };
 
 
-export interface VerifiedArchivePage {
-  records: Array<{ key: Uint8Array; value: Uint8Array }>;
-  next?: Uint8Array;
-}
-
-export const verifyArchiveRange = async (
-  response: ArchiveRangeResponse,
-  sdkAnchor: Uint8Array,
-  query: ArchiveRangeRequest,
-): Promise<VerifiedArchivePage> => {
-  await ensureWasmInitialized();
-  const verified = verifyNativeArchiveRange(response.proof, sdkAnchor, query.toBinary()) as {
-    records: Array<{key: number[]; value: number[]}>;
-    next?: number[];
-  };
-  return {
-    records: verified.records.map(({key,value}) => ({key: new Uint8Array(key), value: new Uint8Array(value)})),
-    ...(verified.next === undefined ? {} : {next: new Uint8Array(verified.next)}),
-  };
-};

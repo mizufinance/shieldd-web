@@ -47,25 +47,3 @@ pub fn verify_native_nullifier(
     .map_err(|error| JsValue::from_str(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = verifyNativeArchiveRange)]
-pub fn verify_native_archive_range(
-    proof: &[u8],
-    sdk_anchor: &[u8],
-    query: &[u8],
-) -> Result<JsValue, JsValue> {
-    (|| -> Result<JsValue> {
-        let query = shieldd_proto::storage::v1::ArchiveRangeRequest::decode(query)?;
-        let query = shieldd_storage::ArchiveQuery {
-            height: query.height,
-            prefix: query.prefix,
-            start: query.start,
-            end: query.end,
-            limit: query.limit as usize,
-        };
-        let page = shieldd_storage::ArchiveRangeProof::decode_canonical(proof)?
-            .verify(anchor(sdk_anchor)?, &query)?;
-        // JS receives only records and a continuation that passed shared Rust verification.
-        serde_wasm_bindgen::to_value(&page).map_err(Into::into)
-    })()
-    .map_err(|error| JsValue::from_str(&error.to_string()))
-}
