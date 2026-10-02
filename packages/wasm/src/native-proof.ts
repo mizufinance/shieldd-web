@@ -10,8 +10,13 @@ export const verifyValue = async (
   key: string,
 ): Promise<Uint8Array | undefined> => {
   await ensureWasmInitialized();
-  verifyNativeValue(response.proof, sdkAnchor, new TextEncoder().encode(key),
-    response.value?.value ?? new Uint8Array(), response.value !== undefined);
+  verifyNativeValue(
+    response.proof,
+    sdkAnchor,
+    new TextEncoder().encode(key),
+    response.value?.value ?? new Uint8Array(),
+    response.value !== undefined,
+  );
   return response.value?.value;
 };
 
@@ -23,5 +28,3 @@ export const verifyNullifier = async (
   await ensureWasmInitialized();
   return verifyNativeNullifier(response.toBinary(), sdkAnchor, requested);
 };
-
-
