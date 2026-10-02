@@ -46,4 +46,3 @@ pub fn verify_native_nullifier(
     })()
     .map_err(|error| JsValue::from_str(&error.to_string()))
 }
-
