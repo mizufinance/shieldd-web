@@ -22,7 +22,8 @@
     "src/view-server.ts",
     "src/compliance.ts",
     "src/disclosure.ts",
-    "src/orbis.ts"
+    "src/orbis.ts",
+    "src/native-proof.ts"
   ],
   "exclude": ["**/*.test.ts", "src/test/**"]
 }

@@ -1,7 +1,7 @@
 import { createRegistry, IMessageTypeRegistry } from '@bufbuild/protobuf';
 
 import * as ibcCore from './services/cosmos-ibc-core.js';
-import * as shielddCnidarium from './services/shieldd-cnidarium.js';
+import * as shielddStorage from './services/shieldd-storage.js';
 import * as shielddCore from './services/shieldd-core.js';
 import * as shielddCustody from './services/shieldd-custody.js';
 import * as shielddUtil from './services/shieldd-util.js';
@@ -21,7 +21,7 @@ import { ClientState, Header } from '../gen/ibc/lightclients/tendermint/v1/tende
 
 export const typeRegistry: IMessageTypeRegistry = createRegistry(
   ...Object.values(ibcCore),
-  ...Object.values(shielddCnidarium),
+  ...Object.values(shielddStorage),
   ...Object.values(shielddCore),
   ...Object.values(shielddCustody),
   ...Object.values(shielddUtil),

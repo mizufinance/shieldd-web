@@ -66,21 +66,7 @@ pub async fn plan_transaction(
     let full_viewing_key = FullViewingKey::decode(full_viewing_key)?;
     let constants: DbConstants = serde_wasm_bindgen::from_value(idb_constants)?;
     let storage = init_idb_storage(constants).await?;
-    let nullifier_window = storage
-        .get_nullifier_window()
-        .await?
-        .context("nullifier window is not synced")?;
-    let recent_position_floor = nullifier_window.recent_position_floor;
-
-    let plan = plan_transaction_inner(
-        storage,
-        tx_planner_req,
-        full_viewing_key,
-        grpc_url,
-        nullifier_window,
-        recent_position_floor,
-    )
-    .await?;
+    let plan = plan_transaction_inner(storage, tx_planner_req, full_viewing_key, grpc_url).await?;
     Ok(plan.encode_to_vec())
 }
 
@@ -89,8 +75,6 @@ pub async fn plan_transaction_inner<Db: Database>(
     request: TransactionPlannerRequest,
     full_viewing_key: FullViewingKey,
     grpc_url: String,
-    nullifier_window: shieldd_sct::nullifier_generation::NullifierWindow,
-    recent_position_floor: u64,
 ) -> WasmResult<TransactionPlan> {
     if !request.host_withdrawals.is_empty() {
         if !request.outputs.is_empty() {
@@ -144,21 +128,13 @@ pub async fn plan_transaction_inner<Db: Database>(
             })
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
-        let action =
-            plan_transfer(&storage, source, outputs, recent_position_floor, &context).await?;
+        let action = plan_transfer(&storage, source, outputs, &context).await?;
         actions.push(ActionPlan::Transfer(action));
     }
 
     for withdrawal in request.host_withdrawals {
         let withdrawal: HostWithdrawal = withdrawal.try_into()?;
-        let action = plan_host_withdrawal(
-            &storage,
-            source,
-            withdrawal,
-            recent_position_floor,
-            &context,
-        )
-        .await?;
+        let action = plan_host_withdrawal(&storage, source, withdrawal, &context).await?;
         actions.push(ActionPlan::ShieldedHostWithdrawal(action));
     }
 
@@ -188,7 +164,6 @@ pub async fn plan_transaction_inner<Db: Database>(
         },
         fee_funding: None,
         memo,
-        nullifier_window: Some(nullifier_window),
     };
 
     if plan.num_outputs() > 0 && plan.memo.is_none() {
@@ -209,7 +184,6 @@ async fn plan_transfer<Db: Database>(
     storage: &Storage<Db>,
     source: AddressIndex,
     outputs: Vec<(Value, Address)>,
-    recent_position_floor: u64,
     context: &PlanningContext<'_>,
 ) -> WasmResult<TransferPlan> {
     let first_value = outputs
@@ -225,7 +199,7 @@ async fn plan_transfer<Db: Database>(
             .ok_or_else(|| anyhow!("transfer amount overflow"))
     })?;
 
-    let selected = select_notes(storage, source, asset_id, required, recent_position_floor).await?;
+    let selected = select_notes(storage, source, asset_id, required).await?;
     if selected.len() > PADDED_TRANSFER_INPUTS {
         return Err(anyhow!(
             "transfer requires note maintenance before browser planning: selected {} notes, maximum is {}",
@@ -297,18 +271,10 @@ async fn plan_host_withdrawal<Db: Database>(
     storage: &Storage<Db>,
     source: AddressIndex,
     withdrawal: HostWithdrawal,
-    recent_position_floor: u64,
     context: &PlanningContext<'_>,
 ) -> WasmResult<ShieldedHostWithdrawalPlan> {
     let asset_id = withdrawal.value.asset_id;
-    let selected = select_notes(
-        storage,
-        source,
-        asset_id,
-        withdrawal.value.amount,
-        recent_position_floor,
-    )
-    .await?;
+    let selected = select_notes(storage, source, asset_id, withdrawal.value.amount).await?;
     ensure_withdrawal_input_limit(selected.len())?;
 
     let total = selected
@@ -367,9 +333,8 @@ async fn select_notes<Db: Database>(
     source: AddressIndex,
     asset_id: shieldd_asset::asset::Id,
     required: Amount,
-    recent_position_floor: u64,
 ) -> WasmResult<Vec<SpendableNoteRecord>> {
-    let mut notes = storage
+    let notes = storage
         .get_notes(shieldd_proto::view::v1::NotesRequest {
             include_spent: false,
             asset_id: Some(asset_id.into()),
@@ -377,11 +342,13 @@ async fn select_notes<Db: Database>(
             amount_to_spend: None,
         })
         .await?;
-    let total_available = notes
-        .iter()
-        .map(|record| record.note.amount())
-        .sum::<Amount>();
-    notes.retain(|record| u64::from(record.position) >= recent_position_floor);
+    select_largest_notes(notes, required)
+}
+
+fn select_largest_notes(
+    mut notes: Vec<SpendableNoteRecord>,
+    required: Amount,
+) -> WasmResult<Vec<SpendableNoteRecord>> {
     notes.sort_by_key(|note| std::cmp::Reverse(note.note.amount()));
 
     let mut total = Amount::zero();
@@ -395,12 +362,6 @@ async fn select_notes<Db: Database>(
     }
 
     if total < required {
-        if total_available >= required {
-            return Err(anyhow!(
-                "spending these funds requires historical nullifier proofs, which browser planning does not yet support"
-            )
-            .into());
-        }
         return Err(anyhow!("insufficient balance for requested transaction").into());
     }
     Ok(selected)
@@ -420,4 +381,50 @@ fn ensure_withdrawal_input_limit(selected: usize) -> WasmResult<()> {
 
 fn current_unix_timestamp() -> u64 {
     (js_sys::Date::now() / 1000.0) as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shieldd_asset::BASE_ASSET_ID;
+    use shieldd_keys::keys::{SpendKey, SpendKeyBytes};
+    use shieldd_shielded_pool::{Note, RecoveryCommitment, Rseed};
+    fn note(amount: u64, position: u64) -> SpendableNoteRecord {
+        let fvk = SpendKey::try_from(SpendKeyBytes([1; 32]))
+            .unwrap()
+            .full_viewing_key()
+            .clone();
+        let source = AddressIndex::new(0);
+        let note = Note::from_parts(
+            fvk.payment_address(source),
+            Value {
+                amount: amount.into(),
+                asset_id: *BASE_ASSET_ID,
+            },
+            Rseed::generate(&mut OsRng),
+            RecoveryCommitment::unavailable(),
+        )
+        .unwrap();
+        SpendableNoteRecord {
+            note_commitment: note.commit(),
+            note,
+            address_index: source,
+            nullifier: shieldd_sct::Nullifier(shieldd_crypto::Fq::from(position)),
+            height_created: 1,
+            height_spent: None,
+            position: position.into(),
+            source: shieldd_sct::CommitmentSource::Genesis,
+            return_address: None,
+        }
+    }
+    #[test]
+    fn recovered_early_note_remains_selectable_without_window_state() {
+        let selected =
+            select_largest_notes(vec![note(3, (1u64 << 32) + 1), note(100, 1)], 50u64.into())
+                .unwrap();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].note.amount(), 100u64.into());
+        assert_eq!(u64::from(selected[0].position), 1);
+        assert!(select_largest_notes(vec![note(3, 1)], 50u64.into()).is_err());
+    }
 }

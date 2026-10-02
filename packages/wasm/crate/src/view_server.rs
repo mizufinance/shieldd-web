@@ -378,9 +378,6 @@ impl ViewServer {
 
 impl ViewServer {
     async fn persist_planning_state(&self, block: &CompactBlock) -> WasmResult<()> {
-        if let Some(window) = &block.nullifier_window {
-            self.storage.set_nullifier_window(window).await?;
-        }
         if let Some(parameters) = &block.discovery_parameters {
             self.storage.set_discovery_parameters(parameters).await?;
         }
