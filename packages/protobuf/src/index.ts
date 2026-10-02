@@ -1,5 +1,5 @@
 export * from './services/cosmos-ibc-core.js';
-export * from './services/shieldd-cnidarium.js';
+export * from './services/shieldd-storage.js';
 export * from './services/shieldd-core.js';
 export * from './services/shieldd-custody.js';
 export * from './services/shieldd-util.js';
