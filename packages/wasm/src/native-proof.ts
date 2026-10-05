@@ -38,7 +38,7 @@ export const verifyNullifier = async (
 };
 
 export interface VerifiedArchivePage {
-  records: Array<{ key: Uint8Array; value: Uint8Array }>;
+  records: { key: Uint8Array; value: Uint8Array }[];
   next?: Uint8Array;
 }
 
@@ -49,7 +49,7 @@ export const verifyArchiveRange = async (
 ): Promise<VerifiedArchivePage> => {
   await ensureWasmInitialized();
   const verified = verifyNativeArchiveRange(response.proof, sdkAnchor, query.toBinary()) as {
-    records: Array<{ key: number[]; value: number[] }>;
+    records: { key: number[]; value: number[] }[];
     next?: number[];
   };
   return {
