@@ -46,6 +46,8 @@ jobs:
         run: node packages/protobuf/tests/packaging.mjs
       - name: Verify shipped admin API vectors
         run: node packages/wasm/tests/admin-api.mjs
+      - name: Verify shared native proof vectors
+        run: node packages/wasm/tests/native-proof.mjs
       - name: Record source revisions
         run: |
           printf 'development\n' > packages/wasm/wasm/build-profile.txt

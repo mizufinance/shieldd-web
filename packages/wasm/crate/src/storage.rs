@@ -12,7 +12,7 @@ use shieldd_proto::{
     view::v1::{NotesRequest, TransactionInfo},
     DomainType,
 };
-use shieldd_sct::{nullifier_generation::NullifierWindow, Nullifier};
+use shieldd_sct::Nullifier;
 use shieldd_shielded_pool::{discovery, note, Note};
 
 use crate::database::indexed_db::open_idb_database;
@@ -284,20 +284,6 @@ impl<Db: Database> Storage<Db> {
     pub async fn get_app_params(&self) -> WasmResult<Option<AppParameters>> {
         let result = self.db.get(&self.tables.app_parameters, "params").await?;
         Ok(result)
-    }
-
-    pub async fn get_nullifier_window(&self) -> WasmResult<Option<NullifierWindow>> {
-        let result = self
-            .db
-            .get(&self.tables.app_parameters, "nullifier_window")
-            .await?;
-        Ok(result)
-    }
-
-    pub async fn set_nullifier_window(&self, window: &NullifierWindow) -> WasmResult<()> {
-        self.db
-            .put_with_key(&self.tables.app_parameters, "nullifier_window", window)
-            .await
     }
 
     pub async fn get_discovery_parameters(&self) -> WasmResult<Option<discovery::Parameters>> {

@@ -18,3 +18,5 @@ mod volume;
 
 mod disclosure;
 mod orbis;
+
+mod native_proof;

@@ -17,7 +17,7 @@
     "gen:ibc": "buf generate buf.build/cosmos/ibc:7ab44ae956a0488ea04e04511efa5f70",
     "gen:ics23": "buf generate buf.build/cosmos/ics23:55085f7c710a45f58fa09947208eb70b",
     "gen:noble": "buf generate buf.build/noble-assets/forwarding:5a8609a6772d417584a9c60cd8b80881",
-    "gen:shieldd": "buf generate ../../vendor/shieldd/proto/shieldd",
+    "gen:shieldd": "rm -rf gen/shieldd/core gen/shieldd/crypto gen/shieldd/view gen/shieldd/execution_client gen/shieldd/storage dist/gen/shieldd/core dist/gen/shieldd/crypto dist/gen/shieldd/view dist/gen/shieldd/execution_client dist/dist/gen/shieldd/storage && rm -f dist/tsconfig.tsbuildinfo && buf generate ../../vendor/shieldd/proto/shieldd",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "lint:strict": "tsc --noEmit && eslint src --max-warnings 0",
