@@ -48,7 +48,11 @@ export const verifyArchiveRange = async (
   query: ArchiveRangeRequest,
 ): Promise<VerifiedArchivePage> => {
   await ensureWasmInitialized();
-  const verified = verifyNativeArchiveRange(response.proof, shielddCommitment, query.toBinary()) as {
+  const verified = verifyNativeArchiveRange(
+    response.proof,
+    shielddCommitment,
+    query.toBinary(),
+  ) as {
     records: { key: number[]; value: number[] }[];
     next?: number[];
   };
